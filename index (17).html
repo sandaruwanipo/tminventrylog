@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trademark Division Inventory</title>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+:root{--bg:#eef1f3;--ink:#13222b;--mut:#5d6d77;--line:#d5dde2;--card:#fff;--acc:#0e6b66;--tint:#e3f1ef;--warn:#b86e00}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 Figtree,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+button,input,select{font:inherit;color:inherit}button{cursor:pointer}:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+header{background:var(--ink);color:#fff;padding:18px 24px;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
+h1{margin:0;font-size:22px;font-weight:700}header p{margin:2px 0 0;color:#a9bac4;font-size:13px}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.bar input{padding:8px 12px;border-radius:8px;border:0;width:230px}
+.btn{border:1px solid var(--line);background:var(--card);padding:8px 14px;border-radius:8px;font-weight:600}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}.btn.warn{background:var(--warn);border-color:var(--warn);color:#fff}
+header .btn{background:transparent;border-color:#4b6170;color:#fff}header .btn.pri{background:var(--acc);border-color:var(--acc)}
+main{max-width:1200px;margin:0 auto;padding:20px 24px}
+.stats{display:flex;gap:28px;margin-bottom:14px;color:var(--mut)}.stats b{font-size:24px;color:var(--ink);margin-right:6px}
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:16px}
+.tabs button{border:0;background:none;padding:10px 16px;font-weight:600;color:var(--mut);border-bottom:3px solid transparent;margin-bottom:-2px}
+.tabs button.on{color:var(--acc);border-color:var(--acc)}
+.grid{display:grid;grid-template-columns:290px 1fr;gap:18px;align-items:start}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px}
+.list{max-height:72vh;overflow:auto}.list button{display:flex;justify-content:space-between;width:100%;border:0;border-bottom:1px solid var(--line);background:none;padding:10px 14px;text-align:left}
+.list button.on{background:var(--tint);font-weight:600}.list span{color:var(--mut)}
+.det{padding:18px 20px}.det h2{margin:0 0 2px;font-size:20px}.sub{color:var(--mut);margin-bottom:12px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line);gap:12px}
+.row input{width:76px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;text-align:right}.row b{min-width:40px;text-align:right}
+.add{display:flex;gap:8px;margin-top:14px}.add select{flex:1;padding:8px;border:1px solid var(--line);border-radius:8px}
+table{width:100%;border-collapse:collapse}th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--mut);font-weight:600;background:#f7f9fa}
+.chip{display:inline-block;background:var(--tint);border-radius:99px;padding:1px 10px;margin:2px 4px 2px 0;font-size:13px}.none{color:#9aa8b1}
+dialog{border:0;border-radius:12px;padding:24px;width:min(420px,92vw)}dialog::backdrop{background:#0008}
+dialog label{display:block;margin:12px 0 4px;font-weight:600}dialog input{width:100%;padding:9px;border:1px solid var(--line);border-radius:8px}
+.err{color:#b3261e;min-height:20px;margin-top:8px}.hint{color:var(--mut);font-size:13px}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;display:none}
+@media(max-width:760px){.grid{grid-template-columns:1fr}.list{max-height:240px}.bar input{width:100%}}
+@media(prefers-reduced-motion:no-preference){.btn{transition:filter .15s}.btn:hover{filter:brightness(.95)}}
+</style></head><body>
+<header><div><h1>Trademark Division Inventory</h1><p id="mode">Viewing as guest</p></div>
+<div class="bar"><input id="q" type="search" placeholder="Search locations or items" aria-label="Search">
+<button class="btn warn" id="save" hidden>Save to GitHub</button><button class="btn" id="addloc" hidden>Add location</button>
+<button class="btn pri" id="login">Admin sign in</button></div></header>
+<main><div class="stats" id="stats"></div>
+<div class="tabs"><button data-t="loc" class="on">By location</button><button data-t="item">By item</button></div>
+<div id="view"><p>Loading inventory…</p></div></main>
+<dialog id="dlg"><h2 style="margin:0">Admin sign in</h2>
+<p class="hint">Only people with write access to the repository can edit. Everyone else sees a read-only view.</p>
+<label for="repo">Repository (owner/name)</label><input id="repo" placeholder="your-name/trademark-inventory">
+<label for="tok">GitHub access token</label><input id="tok" type="password" autocomplete="off">
+<div class="err" id="err"></div><div class="bar" style="justify-content:flex-end"><button class="btn" id="cancel">Cancel</button><button class="btn pri" id="go">Sign in</button></div></dialog>
+<div id="toast" role="status"></div>
+<script>
+const FILE='inventory.xlsx',$=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let wb,ws,items=[],locs=[],totalRow=0,sha,branch='main',tok=sessionStorage.gt||'',repo=sessionStorage.gr||guess(),user=null,dirty=0,S={tab:'loc',sel:null,q:''};
+function guess(){const h=location.hostname;return h.endsWith('github.io')?h.split('.')[0]+'/'+(location.pathname.split('/')[1]||''):''}
+const gh=async(m,p,b)=>{const r=await fetch('https://api.github.com'+p,{method:m,headers:{Authorization:'Bearer '+tok,Accept:'application/vnd.github+json'},body:b&&JSON.stringify(b)});const j=await r.json();if(!r.ok)throw new Error(j.message||r.status);return j};
+const toast=t=>{const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',3500)};
+function val(r,c){const v=ws.getCell(r,c).value;return v&&typeof v==='object'?(v.result??''):(v??'')}
+function layout(){ws=wb.worksheets[0];items=[];locs=[];for(let c=2;c<=ws.columnCount;c++){const n=ws.getCell(1,c).value;if(n)items.push({c,n:String(n).trim()})}
+ totalRow=0;for(let r=2;r<=ws.rowCount+1;r++){if(String(val(r,1)).trim().toLowerCase()==='total'){totalRow=r;break}}
+ for(let r=2;r<totalRow;r++)locs.push({r,n:String(val(r,1)).trim()});if(!locs.find(l=>l.r===S.sel))S.sel=locs[0]?.r}
+const colSum=c=>{let s=0;for(let r=2;r<totalRow;r++){const v=ws.getCell(r,c).value;if(typeof v==='number')s+=v}return s};
+const rowSum=r=>items.reduce((s,i)=>{const v=ws.getCell(r,i.c).value;return s+(typeof v==='number'?v:0)},0);
+function fixTotals(c){const L=ws.getColumn(c).letter;ws.getCell(totalRow,c).value={formula:`SUM(${L}2:${L}${totalRow-1})`,result:colSum(c)}}
+function setVal(r,c,raw){raw=String(raw).trim();ws.getCell(r,c).value=raw===''?null:isNaN(raw)?raw:Number(raw);fixTotals(c);dirty++;meta()}
+async function load(){try{if(user){const j=await gh('GET',`/repos/${repo}/contents/${FILE}?ref=${branch}`);sha=j.sha;const b=atob(j.content.replace(/\n/g,''));wb=new ExcelJS.Workbook();await wb.xlsx.load(Uint8Array.from(b,c=>c.charCodeAt(0)))}
+ else{const r=await fetch(FILE+'?v='+Date.now());if(!r.ok)throw new Error('Could not load '+FILE);wb=new ExcelJS.Workbook();await wb.xlsx.load(await r.arrayBuffer())}
+ layout();dirty=0;render()}catch(e){$('#view').innerHTML=`<p class="err">${esc(e.message)}</p>`}}
+function meta(){$('#stats').innerHTML=`<span><b>${locs.length}</b>locations</span><span><b>${items.length}</b>item types</span><span><b>${items.reduce((s,i)=>s+colSum(i.c),0)}</b>items in total</span>`;
+ const sv=$('#save');sv.hidden=!user;sv.textContent=dirty?`Save to GitHub (${dirty} change${dirty>1?'s':''})`:'No changes to save';sv.disabled=!dirty;$('#addloc').hidden=!user;
+ $('#login').textContent=user?'Sign out':'Admin sign in';$('#login').classList.toggle('pri',!user);$('#mode').textContent=user?`Signed in as ${user} (admin)`:'Viewing as guest';
+ const l=document.querySelector('.list');if(l)l.innerHTML=listHtml()}
+const listHtml=()=>locs.filter(l=>match(l.n)||items.some(i=>S.q&&match(i.n)&&ws.getCell(l.r,i.c).value!=null)).map(l=>`<button data-r="${l.r}" class="${l.r===S.sel?'on':''}">${esc(l.n)}<span>${rowSum(l.r)}</span></button>`).join('')||'<p class="hint" style="padding:14px">No matches.</p>';
+const match=t=>!S.q||t.toLowerCase().includes(S.q.toLowerCase());
+function render(){meta();const v=$('#view');
+ if(S.tab==='loc'){const l=locs.find(x=>x.r===S.sel);const held=l?items.filter(i=>ws.getCell(l.r,i.c).value!=null&&ws.getCell(l.r,i.c).value!==''):[];
+  v.innerHTML=`<div class="grid"><div class="panel list">${listHtml()}</div><div class="panel det">${l?`<h2>${esc(l.n)}</h2><div class="sub">${held.length} item types, ${rowSum(l.r)} items</div>`+
+  (held.map(i=>`<div class="row"><span>${esc(i.n)}</span>${user?`<input value="${esc(val(l.r,i.c))}" data-r="${l.r}" data-c="${i.c}" inputmode="numeric" aria-label="${esc(i.n)} quantity">`:`<b>${esc(val(l.r,i.c))}</b>`}</div>`).join('')||'<p class="hint">Nothing recorded for this location.</p>')+
+  (user?`<div class="add"><select id="newitem"><option value="">Add an item type…</option>${items.filter(i=>!held.includes(i)).map(i=>`<option value="${i.c}">${esc(i.n)}</option>`).join('')}</select><button class="btn pri" id="doadd">Add</button></div><p class="hint">Clear a quantity to remove the item from this location.</p>`:''):'<p>Select a location.</p>'}</div></div>`}
+ else{const rows=items.filter(i=>match(i.n)||locs.some(l=>match(l.n)&&ws.getCell(l.r,i.c).value!=null));
+  v.innerHTML=`<div class="panel" style="overflow:auto"><table><tr><th>Item</th><th>Total</th><th>Held at</th></tr>${rows.map(i=>{const at=locs.filter(l=>{const x=ws.getCell(l.r,i.c).value;return x!=null&&x!==''});return`<tr><td>${esc(i.n)}</td><td><b>${colSum(i.c)}</b></td><td>${at.map(l=>`<span class="chip">${esc(l.n)} ×${esc(val(l.r,i.c))}</span>`).join('')||'<span class="none">Not assigned</span>'}</td></tr>`}).join('')}</table></div>`}}
+$('#q').oninput=e=>{S.q=e.target.value;render()};
+document.querySelector('.tabs').onclick=e=>{const t=e.target.dataset.t;if(!t)return;S.tab=t;document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));render()};
+$('#view').onclick=e=>{const b=e.target.closest('.list button');if(b){S.sel=+b.dataset.r;render()}
+ if(e.target.id==='doadd'){const c=+$('#newitem').value;if(c){setVal(S.sel,c,1);render()}}};
+$('#view').onchange=e=>{const t=e.target;if(t.dataset.c){setVal(+t.dataset.r,+t.dataset.c,t.value)}};
+$('#addloc').onclick=()=>{const n=prompt('Name of the new location');if(!n)return;ws.spliceRows(totalRow,0,[n.trim()]);totalRow++;items.forEach(i=>fixTotals(i.c));dirty++;layout();S.sel=totalRow-1;render()};
+$('#login').onclick=()=>{if(user){if(dirty&&!confirm('You have unsaved changes. Sign out anyway?'))return;user=null;tok='';sessionStorage.clear();load()}else{$('#repo').value=repo;$('#tok').value='';$('#err').textContent='';$('#dlg').showModal()}};
+$('#cancel').onclick=()=>$('#dlg').close();
+$('#go').onclick=async()=>{repo=$('#repo').value.trim();tok=$('#tok').value.trim();$('#err').textContent='';
+ try{const u=await gh('GET','/user');const r=await gh('GET','/repos/'+repo);if(!r.permissions?.push)throw new Error('This account cannot write to '+repo);
+  user=u.login;branch=r.default_branch;sessionStorage.gt=tok;sessionStorage.gr=repo;$('#dlg').close();await load();toast('Signed in as '+user)}
+ catch(e){tok='';$('#err').textContent=e.message==='Bad credentials'?'That token was not accepted.':e.message}};
+$('#save').onclick=async()=>{const b=$('#save');b.disabled=true;b.textContent='Saving…';
+ try{const u=new Uint8Array(await wb.xlsx.writeBuffer());let s='';for(let i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.subarray(i,i+8192));
+  const r=await gh('PUT',`/repos/${repo}/contents/${FILE}`,{message:`Inventory update by ${user}`,content:btoa(s),sha,branch});sha=r.content.sha;dirty=0;meta();toast('Saved. The public site refreshes in about a minute.')}
+ catch(e){toast('Save failed: '+e.message+(/does not match|conflict/i.test(e.message)?'. Someone else saved first, so reload the page.':''));meta()}};
+addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+(async()=>{if(tok&&repo){try{const u=await gh('GET','/user');const r=await gh('GET','/repos/'+repo);if(r.permissions?.push){user=u.login;branch=r.default_branch}}catch{tok=''}}load()})();
+</script></body></html>
