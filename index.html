@@ -1,101 +1,2553 @@
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Trademark Division Inventory</title>
-<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
-<style>
-:root{--bg:#eef1f3;--ink:#13222b;--mut:#5d6d77;--line:#d5dde2;--card:#fff;--acc:#0e6b66;--tint:#e3f1ef;--warn:#b86e00}
-*{box-sizing:border-box}body{margin:0;font:15px/1.5 Figtree,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
-button,input,select{font:inherit;color:inherit}button{cursor:pointer}:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
-header{background:var(--ink);color:#fff;padding:18px 24px;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
-h1{margin:0;font-size:22px;font-weight:700}header p{margin:2px 0 0;color:#a9bac4;font-size:13px}
-.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.bar input{padding:8px 12px;border-radius:8px;border:0;width:230px}
-.btn{border:1px solid var(--line);background:var(--card);padding:8px 14px;border-radius:8px;font-weight:600}
-.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}.btn.warn{background:var(--warn);border-color:var(--warn);color:#fff}
-header .btn{background:transparent;border-color:#4b6170;color:#fff}header .btn.pri{background:var(--acc);border-color:var(--acc)}
-main{max-width:1200px;margin:0 auto;padding:20px 24px}
-.stats{display:flex;gap:28px;margin-bottom:14px;color:var(--mut)}.stats b{font-size:24px;color:var(--ink);margin-right:6px}
-.tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:16px}
-.tabs button{border:0;background:none;padding:10px 16px;font-weight:600;color:var(--mut);border-bottom:3px solid transparent;margin-bottom:-2px}
-.tabs button.on{color:var(--acc);border-color:var(--acc)}
-.grid{display:grid;grid-template-columns:290px 1fr;gap:18px;align-items:start}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:10px}
-.list{max-height:72vh;overflow:auto}.list button{display:flex;justify-content:space-between;width:100%;border:0;border-bottom:1px solid var(--line);background:none;padding:10px 14px;text-align:left}
-.list button.on{background:var(--tint);font-weight:600}.list span{color:var(--mut)}
-.det{padding:18px 20px}.det h2{margin:0 0 2px;font-size:20px}.sub{color:var(--mut);margin-bottom:12px}
-.row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line);gap:12px}
-.row input{width:76px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;text-align:right}.row b{min-width:40px;text-align:right}
-.add{display:flex;gap:8px;margin-top:14px}.add select{flex:1;padding:8px;border:1px solid var(--line);border-radius:8px}
-table{width:100%;border-collapse:collapse}th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--mut);font-weight:600;background:#f7f9fa}
-.chip{display:inline-block;background:var(--tint);border-radius:99px;padding:1px 10px;margin:2px 4px 2px 0;font-size:13px}.none{color:#9aa8b1}
-dialog{border:0;border-radius:12px;padding:24px;width:min(420px,92vw)}dialog::backdrop{background:#0008}
-dialog label{display:block;margin:12px 0 4px;font-weight:600}dialog input{width:100%;padding:9px;border:1px solid var(--line);border-radius:8px}
-.err{color:#b3261e;min-height:20px;margin-top:8px}.hint{color:var(--mut);font-size:13px}
-#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;display:none}
-@media(max-width:760px){.grid{grid-template-columns:1fr}.list{max-height:240px}.bar input{width:100%}}
-@media(prefers-reduced-motion:no-preference){.btn{transition:filter .15s}.btn:hover{filter:brightness(.95)}}
-</style></head><body>
-<header><div><h1>Trademark Division Inventory</h1><p id="mode">Viewing as guest</p></div>
-<div class="bar"><input id="q" type="search" placeholder="Search locations or items" aria-label="Search">
-<button class="btn warn" id="save" hidden>Save to GitHub</button><button class="btn" id="addloc" hidden>Add location</button>
-<button class="btn pri" id="login">Admin sign in</button></div></header>
-<main><div class="stats" id="stats"></div>
-<div class="tabs"><button data-t="loc" class="on">By location</button><button data-t="item">By item</button></div>
-<div id="view"><p>Loading inventory…</p></div></main>
-<dialog id="dlg"><h2 style="margin:0">Admin sign in</h2>
-<p class="hint">Only people with write access to the repository can edit. Everyone else sees a read-only view.</p>
-<label for="repo">Repository (owner/name)</label><input id="repo" placeholder="your-name/trademark-inventory">
-<label for="tok">GitHub access token</label><input id="tok" type="password" autocomplete="off">
-<div class="err" id="err"></div><div class="bar" style="justify-content:flex-end"><button class="btn" id="cancel">Cancel</button><button class="btn pri" id="go">Sign in</button></div></dialog>
-<div id="toast" role="status"></div>
-<script>
-const FILE='inventory.xlsx',$=s=>document.querySelector(s);
-const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let wb,ws,items=[],locs=[],totalRow=0,sha,branch='main',tok=sessionStorage.gt||'',repo=sessionStorage.gr||guess(),user=null,dirty=0,S={tab:'loc',sel:null,q:''};
-function guess(){const h=location.hostname;return h.endsWith('github.io')?h.split('.')[0]+'/'+(location.pathname.split('/')[1]||''):''}
-const gh=async(m,p,b)=>{const r=await fetch('https://api.github.com'+p,{method:m,headers:{Authorization:'Bearer '+tok,Accept:'application/vnd.github+json'},body:b&&JSON.stringify(b)});const j=await r.json();if(!r.ok)throw new Error(j.message||r.status);return j};
-const toast=t=>{const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',3500)};
-function val(r,c){const v=ws.getCell(r,c).value;return v&&typeof v==='object'?(v.result??''):(v??'')}
-function layout(){ws=wb.worksheets[0];items=[];locs=[];for(let c=2;c<=ws.columnCount;c++){const n=ws.getCell(1,c).value;if(n)items.push({c,n:String(n).trim()})}
- totalRow=0;for(let r=2;r<=ws.rowCount+1;r++){if(String(val(r,1)).trim().toLowerCase()==='total'){totalRow=r;break}}
- for(let r=2;r<totalRow;r++)locs.push({r,n:String(val(r,1)).trim()});if(!locs.find(l=>l.r===S.sel))S.sel=locs[0]?.r}
-const colSum=c=>{let s=0;for(let r=2;r<totalRow;r++){const v=ws.getCell(r,c).value;if(typeof v==='number')s+=v}return s};
-const rowSum=r=>items.reduce((s,i)=>{const v=ws.getCell(r,i.c).value;return s+(typeof v==='number'?v:0)},0);
-function fixTotals(c){const L=ws.getColumn(c).letter;ws.getCell(totalRow,c).value={formula:`SUM(${L}2:${L}${totalRow-1})`,result:colSum(c)}}
-function setVal(r,c,raw){raw=String(raw).trim();ws.getCell(r,c).value=raw===''?null:isNaN(raw)?raw:Number(raw);fixTotals(c);dirty++;meta()}
-async function load(){try{if(user){const j=await gh('GET',`/repos/${repo}/contents/${FILE}?ref=${branch}`);sha=j.sha;const b=atob(j.content.replace(/\n/g,''));wb=new ExcelJS.Workbook();await wb.xlsx.load(Uint8Array.from(b,c=>c.charCodeAt(0)))}
- else{const r=await fetch(FILE+'?v='+Date.now());if(!r.ok)throw new Error('Could not load '+FILE);wb=new ExcelJS.Workbook();await wb.xlsx.load(await r.arrayBuffer())}
- layout();dirty=0;render()}catch(e){$('#view').innerHTML=`<p class="err">${esc(e.message)}</p>`}}
-function meta(){$('#stats').innerHTML=`<span><b>${locs.length}</b>locations</span><span><b>${items.length}</b>item types</span><span><b>${items.reduce((s,i)=>s+colSum(i.c),0)}</b>items in total</span>`;
- const sv=$('#save');sv.hidden=!user;sv.textContent=dirty?`Save to GitHub (${dirty} change${dirty>1?'s':''})`:'No changes to save';sv.disabled=!dirty;$('#addloc').hidden=!user;
- $('#login').textContent=user?'Sign out':'Admin sign in';$('#login').classList.toggle('pri',!user);$('#mode').textContent=user?`Signed in as ${user} (admin)`:'Viewing as guest';
- const l=document.querySelector('.list');if(l)l.innerHTML=listHtml()}
-const listHtml=()=>locs.filter(l=>match(l.n)||items.some(i=>S.q&&match(i.n)&&ws.getCell(l.r,i.c).value!=null)).map(l=>`<button data-r="${l.r}" class="${l.r===S.sel?'on':''}">${esc(l.n)}<span>${rowSum(l.r)}</span></button>`).join('')||'<p class="hint" style="padding:14px">No matches.</p>';
-const match=t=>!S.q||t.toLowerCase().includes(S.q.toLowerCase());
-function render(){meta();const v=$('#view');
- if(S.tab==='loc'){const l=locs.find(x=>x.r===S.sel);const held=l?items.filter(i=>ws.getCell(l.r,i.c).value!=null&&ws.getCell(l.r,i.c).value!==''):[];
-  v.innerHTML=`<div class="grid"><div class="panel list">${listHtml()}</div><div class="panel det">${l?`<h2>${esc(l.n)}</h2><div class="sub">${held.length} item types, ${rowSum(l.r)} items</div>`+
-  (held.map(i=>`<div class="row"><span>${esc(i.n)}</span>${user?`<input value="${esc(val(l.r,i.c))}" data-r="${l.r}" data-c="${i.c}" inputmode="numeric" aria-label="${esc(i.n)} quantity">`:`<b>${esc(val(l.r,i.c))}</b>`}</div>`).join('')||'<p class="hint">Nothing recorded for this location.</p>')+
-  (user?`<div class="add"><select id="newitem"><option value="">Add an item type…</option>${items.filter(i=>!held.includes(i)).map(i=>`<option value="${i.c}">${esc(i.n)}</option>`).join('')}</select><button class="btn pri" id="doadd">Add</button></div><p class="hint">Clear a quantity to remove the item from this location.</p>`:''):'<p>Select a location.</p>'}</div></div>`}
- else{const rows=items.filter(i=>match(i.n)||locs.some(l=>match(l.n)&&ws.getCell(l.r,i.c).value!=null));
-  v.innerHTML=`<div class="panel" style="overflow:auto"><table><tr><th>Item</th><th>Total</th><th>Held at</th></tr>${rows.map(i=>{const at=locs.filter(l=>{const x=ws.getCell(l.r,i.c).value;return x!=null&&x!==''});return`<tr><td>${esc(i.n)}</td><td><b>${colSum(i.c)}</b></td><td>${at.map(l=>`<span class="chip">${esc(l.n)} ×${esc(val(l.r,i.c))}</span>`).join('')||'<span class="none">Not assigned</span>'}</td></tr>`}).join('')}</table></div>`}}
-$('#q').oninput=e=>{S.q=e.target.value;render()};
-document.querySelector('.tabs').onclick=e=>{const t=e.target.dataset.t;if(!t)return;S.tab=t;document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));render()};
-$('#view').onclick=e=>{const b=e.target.closest('.list button');if(b){S.sel=+b.dataset.r;render()}
- if(e.target.id==='doadd'){const c=+$('#newitem').value;if(c){setVal(S.sel,c,1);render()}}};
-$('#view').onchange=e=>{const t=e.target;if(t.dataset.c){setVal(+t.dataset.r,+t.dataset.c,t.value)}};
-$('#addloc').onclick=()=>{const n=prompt('Name of the new location');if(!n)return;ws.spliceRows(totalRow,0,[n.trim()]);totalRow++;items.forEach(i=>fixTotals(i.c));dirty++;layout();S.sel=totalRow-1;render()};
-$('#login').onclick=()=>{if(user){if(dirty&&!confirm('You have unsaved changes. Sign out anyway?'))return;user=null;tok='';sessionStorage.clear();load()}else{$('#repo').value=repo;$('#tok').value='';$('#err').textContent='';$('#dlg').showModal()}};
-$('#cancel').onclick=()=>$('#dlg').close();
-$('#go').onclick=async()=>{repo=$('#repo').value.trim();tok=$('#tok').value.trim();$('#err').textContent='';
- try{const u=await gh('GET','/user');const r=await gh('GET','/repos/'+repo);if(!r.permissions?.push)throw new Error('This account cannot write to '+repo);
-  user=u.login;branch=r.default_branch;sessionStorage.gt=tok;sessionStorage.gr=repo;$('#dlg').close();await load();toast('Signed in as '+user)}
- catch(e){tok='';$('#err').textContent=e.message==='Bad credentials'?'That token was not accepted.':e.message}};
-$('#save').onclick=async()=>{const b=$('#save');b.disabled=true;b.textContent='Saving…';
- try{const u=new Uint8Array(await wb.xlsx.writeBuffer());let s='';for(let i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.subarray(i,i+8192));
-  const r=await gh('PUT',`/repos/${repo}/contents/${FILE}`,{message:`Inventory update by ${user}`,content:btoa(s),sha,branch});sha=r.content.sha;dirty=0;meta();toast('Saved. The public site refreshes in about a minute.')}
- catch(e){toast('Save failed: '+e.message+(/does not match|conflict/i.test(e.message)?'. Someone else saved first, so reload the page.':''));meta()}};
-addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
-(async()=>{if(tok&&repo){try{const u=await gh('GET','/user');const r=await gh('GET','/repos/'+repo);if(r.permissions?.push){user=u.login;branch=r.default_branch}}catch{tok=''}}load()})();
-</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trademark Division — Asset & Inventory Management Portal (NIPO Sri Lanka)</title>
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --surface-alt: #f8fafc;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --text-light: #64748b;
+      --primary: #1d4ed8;
+      --primary-hover: #1e40af;
+      --primary-soft: #eff6ff;
+      --primary-border: #bfdbfe;
+      --emerald: #059669;
+      --emerald-soft: #ecfdf5;
+      --emerald-border: #a7f3d0;
+      --amber: #d97706;
+      --amber-soft: #fffbeb;
+      --amber-border: #fde68a;
+      --rose: #dc2626;
+      --rose-soft: #fef2f2;
+      --rose-border: #fecaca;
+      --indigo: #4f46e5;
+      --indigo-soft: #eef2ff;
+      --radius: 12px;
+      --radius-lg: 16px;
+      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+      --shadow: 0 4px 12px rgba(15, 23, 42, 0.07);
+      --shadow-lg: 0 20px 35px rgba(15, 23, 42, 0.18);
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, select, textarea {
+      font-family: inherit;
+      font-size: 0.875rem;
+    }
+
+    button {
+      cursor: pointer;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    button:active { transform: scale(0.98); }
+
+    .btn-primary { background: var(--primary); color: #fff; padding: 8px 14px; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-indigo { background: var(--indigo); color: #fff; padding: 8px 14px; }
+    .btn-indigo:hover { background: #4338ca; }
+    .btn-emerald { background: var(--emerald); color: #fff; padding: 8px 14px; }
+    .btn-emerald:hover { background: #047857; }
+    .btn-amber { background: var(--amber); color: #fff; padding: 8px 14px; }
+    .btn-amber:hover { background: #b45309; }
+    .btn-dark { background: #0f172a; color: #fff; padding: 8px 14px; }
+    .btn-dark:hover { background: #1e293b; }
+    .btn-outline { background: #fff; color: var(--text); border-color: var(--border-strong); padding: 7px 13px; }
+    .btn-outline:hover { background: var(--surface-alt); }
+    .btn-soft-amber { background: var(--amber-soft); color: #92400e; border-color: var(--amber-border); padding: 7px 13px; }
+    .btn-soft-amber:hover { background: #fef3c7; }
+    .btn-soft-rose { background: var(--rose-soft); color: #b91c1c; border-color: var(--rose-border); padding: 7px 13px; }
+    .btn-soft-rose:hover { background: #fee2e2; }
+    .btn-xs { padding: 4px 9px; font-size: 0.75rem; border-radius: 7px; }
+
+    input[type="text"], input[type="password"], input[type="number"], select, textarea {
+      width: 100%;
+      padding: 8px 11px;
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.14);
+    }
+
+    /* Header */
+    .topbar {
+      background: #ffffff;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      box-shadow: var(--shadow-sm);
+    }
+    .container {
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+    .topbar-inner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 0;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #1e3a8a, #2563eb);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1rem;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+    .brand-title {
+      font-size: 1.05rem;
+      font-weight: 800;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .brand-sub {
+      font-size: 0.78rem;
+      color: var(--text-light);
+      margin: 2px 0 0;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      border: 1px solid transparent;
+    }
+    .badge-viewer { background: #f1f5f9; color: #334155; border-color: #cbd5e1; }
+    .badge-admin { background: var(--emerald-soft); color: #065f46; border-color: var(--emerald-border); }
+    .badge-good { background: var(--emerald-soft); color: #065f46; border-color: var(--emerald-border); }
+    .badge-fair { background: var(--amber-soft); color: #92400e; border-color: var(--amber-border); }
+    .badge-repair { background: #ffedd5; color: #9a3412; border-color: #fed7aa; }
+    .badge-condemned { background: var(--rose-soft); color: #991b1b; border-color: var(--rose-border); }
+    .badge-storage { background: var(--amber-soft); color: #92400e; border-color: var(--amber-border); }
+    .badge-tag {
+      font-family: var(--font-mono);
+      background: var(--primary-soft);
+      color: var(--primary);
+      border-color: var(--primary-border);
+      font-weight: 700;
+    }
+
+    .header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Post-Update Banner */
+    .action-banner {
+      background: linear-gradient(90deg, #065f46, #047857);
+      color: #fff;
+      padding: 12px 0;
+      border-bottom: 1px solid #059669;
+    }
+    .action-banner-inner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    /* KPI Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(195px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .kpi-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-light);
+    }
+    .kpi-val {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin: 4px 0 2px;
+      color: var(--text);
+    }
+    .kpi-sub {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+    }
+
+    /* Navigation Tabs */
+    .nav-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      background: var(--surface);
+      padding: 8px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .tab-btn {
+      background: transparent;
+      color: var(--text-muted);
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 0.84rem;
+    }
+    .tab-btn:hover { background: var(--surface-alt); color: var(--text); }
+    .tab-btn.active {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 2px 6px rgba(29, 78, 216, 0.25);
+    }
+    .tab-pill {
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 800;
+      background: rgba(15, 23, 42, 0.08);
+    }
+    .tab-btn.active .tab-pill { background: rgba(255, 255, 255, 0.22); color: #fff; }
+
+    /* Split Screen Custodians View */
+    .split-layout {
+      display: grid;
+      grid-template-columns: 330px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    @media (max-width: 920px) {
+      .split-layout { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-alt);
+    }
+    .card-body { padding: 16px; }
+
+    .directory-list {
+      max-height: 640px;
+      overflow-y: auto;
+    }
+    .dir-item {
+      width: 100%;
+      text-align: left;
+      background: #fff;
+      border: none;
+      border-bottom: 1px solid #f1f5f9;
+      border-left: 4px solid transparent;
+      border-radius: 0;
+      padding: 11px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .dir-item:hover { background: #f8fafc; }
+    .dir-item.selected {
+      background: var(--primary-soft);
+      border-left-color: var(--primary);
+    }
+    .dir-name {
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: var(--text);
+      display: block;
+    }
+    .dir-meta {
+      font-size: 0.73rem;
+      color: var(--text-light);
+    }
+
+    /* Tables */
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.82rem;
+    }
+    th {
+      background: #f8fafc;
+      color: var(--text-muted);
+      font-size: 0.71rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: middle;
+    }
+    tr:hover td { background: #fafcff; }
+    .mono { font-family: var(--font-mono); }
+
+    /* Assign Form Panel */
+    .assign-box {
+      background: var(--primary-soft);
+      border: 1px solid var(--primary-border);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-top: 14px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .field label {
+      display: block;
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: #334155;
+      margin-bottom: 4px;
+    }
+
+    /* Modals */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.62);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 60;
+      overflow-y: auto;
+    }
+    .modal-box {
+      background: #fff;
+      border-radius: var(--radius-lg);
+      max-width: 580px;
+      width: 100%;
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      max-height: 92vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .modal-box.wide { max-width: 860px; }
+    .modal-head {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface-alt);
+    }
+    .modal-head h3 { margin: 0; font-size: 1rem; font-weight: 800; }
+    .modal-body {
+      padding: 18px;
+      overflow-y: auto;
+    }
+    .modal-foot {
+      padding: 12px 18px;
+      border-top: 1px solid var(--border);
+      background: var(--surface-alt);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .hidden { display: none !important; }
+
+    /* Toast */
+    .toast-wrap {
+      position: fixed;
+      bottom: 18px;
+      right: 18px;
+      z-index: 90;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toast {
+      background: #0f172a;
+      color: #fff;
+      padding: 11px 16px;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      box-shadow: var(--shadow-lg);
+      border-left: 4px solid #10b981;
+      max-width: 360px;
+    }
+    .toast.error { border-left-color: #ef4444; background: #7f1d1d; }
+    .toast.warn { border-left-color: #f59e0b; }
+
+    /* Analytics Bars & Cards */
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 16px;
+    }
+    .bar-row {
+      margin-bottom: 10px;
+    }
+    .bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .bar-track {
+      height: 10px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 999px;
+    }
+
+    /* Official A4 Print Document */
+    .a4-sheet {
+      background: #fff;
+      color: #000;
+      padding: 20px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+    }
+    .a4-sheet table th, .a4-sheet table td {
+      border: 1px solid #475569;
+      padding: 6px 8px;
+      font-size: 0.76rem;
+    }
+    .sig-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 42px;
+    }
+    .sig-line {
+      border-top: 1px solid #0f172a;
+      padding-top: 6px;
+      font-size: 0.75rem;
+    }
+
+    @media print {
+      body * { visibility: hidden !important; }
+      #print-modal, #print-modal * { visibility: visible !important; }
+      #print-modal {
+        position: fixed !important;
+        inset: 0 !important;
+        background: #fff !important;
+        padding: 0 !important;
+        overflow: visible !important;
+      }
+      #print-modal .modal-box {
+        max-width: 100% !important;
+        max-height: none !important;
+        box-shadow: none !important;
+        border: none !important;
+      }
+      .no-print { display: none !important; }
+      .a4-sheet { border: none !important; padding: 8mm !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP HEADER -->
+  <header class="topbar">
+    <div class="container">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="brand-logo">NIPO</div>
+          <div>
+            <h1 class="brand-title">
+              Trademark Division — Inventory &amp; Handover Portal
+              <span id="auth-badge" class="badge badge-viewer">Viewer Mode</span>
+            </h1>
+            <p class="brand-sub">National Intellectual Property Office (Sri Lanka) &bull; Serialized Asset &amp; Custody Control</p>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <button id="btn-top-handover" class="btn-indigo hidden" data-action="open-handover">
+            &#8644; Hand Over / Transfer
+          </button>
+          <button id="btn-top-storage" class="btn-amber hidden" data-action="open-storage-issue">
+            &#128230; Issue from Storage
+          </button>
+          <button class="btn-soft-amber" data-action="open-clarification">
+            &#10067; Ask Clarification
+          </button>
+          <button class="btn-emerald" data-action="export-master-excel">
+            &#128196; Export Master Excel (.xls)
+          </button>
+          <button id="btn-auth-toggle" class="btn-primary" data-action="toggle-auth">
+            &#128274; Admin Login
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- POST-UPDATE INSTANT HANDOVER BANNER -->
+  <div id="post-update-banner" class="action-banner hidden">
+    <div class="container">
+      <div class="action-banner-inner">
+        <div>
+          <strong id="banner-title" style="font-size:0.92rem;">Inventory Updated</strong>
+          <div id="banner-sub" style="font-size:0.78rem; opacity:0.92;">Download the updated officer Excel summary or print the A4 sign-off sheet immediately.</div>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+          <button class="btn-outline" style="background:#fff; color:#065f46; border:none;" data-action="banner-download-excel">
+            &#11015; Download Officer Excel (.xls)
+          </button>
+          <button class="btn-dark" data-action="banner-print-sheet">
+            &#128424; Print A4 Sign-Off Sheet
+          </button>
+          <button class="btn-xs" style="background:rgba(255,255,255,0.2); color:#fff;" data-action="dismiss-banner">
+            Dismiss
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTAINER -->
+  <main class="container" style="padding-bottom: 40px;">
+
+    <!-- KPI SUMMARY CARDS -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">Custodians &amp; Rooms</div>
+        <div id="kpi-custodians" class="kpi-val">37</div>
+        <div class="kpi-sub">30 Officers + 6 Rooms + Internal Store</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Total Serialized Units</div>
+        <div id="kpi-units" class="kpi-val">0</div>
+        <div class="kpi-sub">Each unit tracked with Asset Tag &amp; S/N</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Utility Categories</div>
+        <div id="kpi-categories" class="kpi-val">62</div>
+        <div class="kpi-sub">Standardized NIPO equipment classes</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">In Internal Storage</div>
+        <div id="kpi-storage" class="kpi-val" style="color:var(--amber);">0</div>
+        <div class="kpi-sub">Division Store &amp; Additional Goods pool</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Open Clarifications</div>
+        <div id="kpi-clarifications" class="kpi-val" style="color:var(--rose);">0</div>
+        <div class="kpi-sub">Officer handover &amp; serial queries</div>
+      </div>
+    </section>
+
+    <!-- NAVIGATION TABS -->
+    <nav class="nav-tabs" role="tablist">
+      <button class="tab-btn active" data-action="switch-tab" data-tab="custodians">
+        Custodians &amp; Rooms <span id="pill-custodians" class="tab-pill">37</span>
+      </button>
+      <button class="tab-btn" data-action="switch-tab" data-tab="serials">
+        Serial &amp; Asset Tracker <span id="pill-serials" class="tab-pill">0</span>
+      </button>
+      <button class="tab-btn" data-action="switch-tab" data-tab="storage">
+        Internal Storage <span id="pill-storage" class="tab-pill">0</span>
+      </button>
+      <button class="tab-btn" data-action="switch-tab" data-tab="clarifications">
+        Clarifications <span id="pill-clarifications" class="tab-pill">0</span>
+      </button>
+      <button class="tab-btn" data-action="switch-tab" data-tab="logs">
+        Custody &amp; Audit Log <span id="pill-logs" class="tab-pill">0</span>
+      </button>
+      <button class="tab-btn" data-action="switch-tab" data-tab="analytics">
+        Executive Analytics &amp; Filing
+      </button>
+    </nav>
+
+    <!-- ==================== TAB 1: CUSTODIANS & ROOMS ==================== -->
+    <section id="tab-custodians" class="split-layout">
+      <!-- Left Directory -->
+      <aside class="card">
+        <div class="card-header">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <strong style="font-size:0.88rem;">Division Directory (All 37)</strong>
+            <span id="dir-filtered-count" class="badge badge-tag">37</span>
+          </div>
+          <input type="text" id="dir-search" placeholder="Filter officer name or room..." />
+          <div id="admin-dir-tools" class="hidden" style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:8px;">
+            <button class="btn-primary btn-xs" data-action="open-add-person">+ Add Person/Room</button>
+            <button class="btn-dark btn-xs" data-action="open-add-category">+ Add Item Type</button>
+          </div>
+        </div>
+        <div id="directory-list" class="directory-list"></div>
+      </aside>
+
+      <!-- Right Selected Custodian Profile -->
+      <div class="card">
+        <div class="card-header" style="background:#fff;">
+          <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start; gap:12px;">
+            <div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span id="prof-record-badge" class="badge badge-viewer">Record #1</span>
+                <span id="prof-role-badge" class="badge badge-tag">Officer / Section</span>
+              </div>
+              <h2 id="prof-name" style="margin:6px 0 2px; font-size:1.35rem; font-weight:800;">Director (Legal)</h2>
+              <p id="prof-summary-line" style="margin:0; font-size:0.82rem; color:var(--text-muted);">
+                Loading assigned items...
+              </p>
+            </div>
+
+            <div style="display:flex; flex-wrap:wrap; gap:8px;">
+              <button id="btn-prof-assign" class="btn-primary hidden" data-action="toggle-assign-panel">
+                + Assign New Utility
+              </button>
+              <button id="btn-prof-handover" class="btn-indigo hidden" data-action="open-handover-selected">
+                &#8644; Hand Over / Transfer
+              </button>
+              <button id="btn-prof-storage-issue" class="btn-amber hidden" data-action="open-storage-issue-selected">
+                &#128230; Issue from Storage
+              </button>
+              <button class="btn-emerald" data-action="download-selected-excel">
+                &#128196; Download Excel (.xls) Sign-Off
+              </button>
+              <button class="btn-dark" data-action="print-selected-sheet">
+                &#128424; Print Sign-Off Sheet
+              </button>
+            </div>
+          </div>
+
+          <!-- Viewer Mode Prompt -->
+          <div id="viewer-hint-bar" style="margin-top:12px; padding:10px 12px; background:#f8fafc; border:1px solid var(--border); border-radius:10px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; font-size:0.78rem; color:var(--text-muted);">
+            <span><strong>Viewer Mode:</strong> You can inspect all serial numbers, download Excel sign-off summaries, print A4 forms, or submit a <strong>Clarification Query</strong>. Log in as Admin to assign, transfer, or remove utilities.</span>
+            <button class="btn-primary btn-xs" data-action="open-login">Admin Login &rarr;</button>
+          </div>
+
+          <!-- Admin Assign New Utility Form -->
+          <div id="assign-panel" class="assign-box hidden">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <strong style="font-size:0.86rem; color:#1e3a8a;">Assign New Serialized Utility to <span id="assign-target-label">Officer</span></strong>
+              <span class="badge badge-tag">Auto-Generates Division Asset Tag</span>
+            </div>
+            <form id="form-assign-utility">
+              <div class="form-grid">
+                <div class="field" style="grid-column: span 2;">
+                  <label>Utility / Equipment Name (62 Categories or Type New)</label>
+                  <input type="text" id="assign-item-name" list="datalist-categories" required placeholder="Select or type utility name..." />
+                  <datalist id="datalist-categories"></datalist>
+                </div>
+                <div class="field">
+                  <label>Quantity</label>
+                  <input type="number" id="assign-qty" min="1" max="50" value="1" required />
+                </div>
+                <div class="field">
+                  <label>Manufacturer Serial # (Optional)</label>
+                  <input type="text" id="assign-sn" placeholder="Auto-generated if blank" />
+                </div>
+                <div class="field">
+                  <label>Condition</label>
+                  <select id="assign-cond">
+                    <option value="Good">Good</option>
+                    <option value="Fair">Fair</option>
+                    <option value="Needs Repair">Needs Repair</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Est. Value (LKR)</label>
+                  <input type="number" id="assign-val" min="0" step="100" placeholder="Auto-estimated" />
+                </div>
+                <div class="field" style="grid-column: span 2;">
+                  <label>Voucher / Allocation Remark</label>
+                  <input type="text" id="assign-remark" placeholder="e.g. New Stock Issuance / File Ref #2026" />
+                </div>
+              </div>
+              <div style="margin-top:10px; display:flex; justify-content:flex-end; gap:8px;">
+                <button type="button" class="btn-outline btn-xs" data-action="toggle-assign-panel">Hide Form</button>
+                <button type="submit" class="btn-primary">&#10003; Save &amp; Generate Sign-Off Sheet</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Assigned Items Table -->
+        <div class="card-body" style="padding:0;">
+          <div style="padding:12px 16px; border-bottom:1px solid var(--border); display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px;">
+            <strong style="font-size:0.86rem;">Assigned Serialized Utilities Register</strong>
+            <input type="text" id="prof-item-search" placeholder="Filter by Asset Tag, S/N, or Item..." style="max-width:260px; padding:6px 10px; font-size:0.8rem;" />
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Division Asset Tag</th>
+                  <th>Manufacturer S/N</th>
+                  <th>Utility Description</th>
+                  <th>Condition</th>
+                  <th>Est. Value</th>
+                  <th style="text-align:right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="prof-units-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: SERIAL & ASSET TRACKER ==================== -->
+    <section id="tab-serials" class="card hidden">
+      <div class="card-header">
+        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px;">
+          <div>
+            <strong style="font-size:0.98rem;">Division-Wide Serial &amp; Asset Tracker</strong>
+            <div style="font-size:0.78rem; color:var(--text-muted);">Search across every physical asset tag, manufacturer serial number, or officer in the Trademark Division.</div>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <input type="text" id="serial-search" placeholder="Search TM-CPU-0001, S/N, item, holder..." style="width:260px;" />
+            <select id="serial-cond-filter" style="width:155px;">
+              <option value="ALL">All Conditions</option>
+              <option value="Good">Good</option>
+              <option value="Fair">Fair</option>
+              <option value="Needs Repair">Needs Repair</option>
+              <option value="Condemned">Condemned</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Asset Tag</th>
+              <th>Serial # (S/N)</th>
+              <th>Utility Description</th>
+              <th>Current Custodian</th>
+              <th>Condition</th>
+              <th>Transfers</th>
+              <th style="text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="serial-tbody"></tbody>
+        </table>
+      </div>
+      <div id="serial-footer" style="padding:10px 16px; font-size:0.78rem; color:var(--text-muted); border-top:1px solid var(--border);"></div>
+    </section>
+
+    <!-- ==================== TAB 3: INTERNAL STORAGE ==================== -->
+    <section id="tab-storage" class="card hidden">
+      <div class="card-header">
+        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px;">
+          <div>
+            <span class="badge badge-storage">Division Reserve &amp; Returned Stock</span>
+            <h2 style="margin:4px 0 2px; font-size:1.1rem; font-weight:800;">Internal Storage (Division Store) &amp; Additional Goods</h2>
+            <p style="margin:0; font-size:0.78rem; color:var(--text-muted);">Items returned by officers stay safely logged here with their original serial numbers until issued out again.</p>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <button id="btn-storage-tab-issue" class="btn-amber hidden" data-action="open-storage-issue">
+              &#128230; Issue Item to Officer
+            </button>
+            <button class="btn-emerald" data-action="download-storage-excel">
+              &#128196; Download Storage Excel (.xls)
+            </button>
+            <button class="btn-dark" data-action="print-storage-sheet">
+              &#128424; Print Storage Stock Sheet
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="storage-summary-cards" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px; margin-bottom:16px;"></div>
+        <div class="table-wrap" style="border:1px solid var(--border); border-radius:12px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Asset Tag</th>
+                <th>Serial # (S/N)</th>
+                <th>Utility Description</th>
+                <th>Storage Location</th>
+                <th>Condition</th>
+                <th>Last Custody Note</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="storage-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: CLARIFICATIONS ==================== -->
+    <section id="tab-clarifications" class="card hidden">
+      <div class="card-header">
+        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px;">
+          <div>
+            <strong style="font-size:1rem;">Officer Clarification &amp; Handover Verification Desk</strong>
+            <div style="font-size:0.78rem; color:var(--text-muted);">Officers can raise questions regarding handed-over items, serial numbers, or storage returns. Admins can post official resolutions.</div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <select id="clar-filter" style="width:170px;">
+              <option value="ALL">All Clarifications</option>
+              <option value="OPEN">Open / Pending</option>
+              <option value="RESOLVED">Resolved</option>
+            </select>
+            <button class="btn-amber" data-action="open-clarification">+ Raise Clarification</button>
+          </div>
+        </div>
+      </div>
+      <div id="clarifications-container" class="card-body"></div>
+    </section>
+
+    <!-- ==================== TAB 5: CUSTODY & AUDIT LOG ==================== -->
+    <section id="tab-logs" class="card hidden">
+      <div class="card-header">
+        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px;">
+          <div>
+            <strong style="font-size:1rem;">Immutable Custody Transfer &amp; Audit Log</strong>
+            <div style="font-size:0.78rem; color:var(--text-muted);">Every From &rarr; To handover, storage return, storage issuance, new assignment, or removal is recorded with instant voucher printing.</div>
+          </div>
+          <button id="btn-clear-logs" class="btn-soft-rose btn-xs hidden" data-action="clear-logs">Clear Log History</button>
+        </div>
+      </div>
+      <div id="logs-container" class="card-body"></div>
+    </section>
+
+    <!-- ==================== TAB 6: EXECUTIVE ANALYTICS & FILING ==================== -->
+    <section id="tab-analytics" class="hidden">
+      <div class="analytics-grid">
+        <div class="card">
+          <div class="card-header"><strong>Top 10 Custodians &amp; Rooms by Asset Volume</strong></div>
+          <div id="chart-top-holders" class="card-body"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><strong>Asset Distribution by Equipment Class &amp; Valuation</strong></div>
+          <div id="chart-classes" class="card-body"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><strong>Asset Physical Condition &amp; Readiness</strong></div>
+          <div id="chart-conditions" class="card-body"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><strong>Master Audit Filing, JSON Backup &amp; Reset</strong></div>
+          <div class="card-body" style="display:flex; flex-direction:column; gap:10px;">
+            <p style="margin:0; font-size:0.8rem; color:var(--text-muted);">
+              Generate the complete 5-sheet Master Audit Workbook (All Custodians Matrix, All Serialized Units, Internal Storage, Custody Log, and Clarifications) for official NIPO filing.
+            </p>
+            <button class="btn-emerald" data-action="export-master-excel">&#128196; Download 5-Sheet Master Audit Excel (.xls)</button>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <button class="btn-outline" data-action="export-json-backup">&#11015; Export JSON Backup</button>
+              <label class="btn-outline" style="cursor:pointer; text-align:center; padding:8px 12px; border:1px solid var(--border-strong); border-radius:10px; font-weight:600; font-size:0.84rem;">
+                &#11014; Restore JSON
+                <input type="file" id="import-json-input" accept=".json" class="hidden" />
+              </label>
+            </div>
+            <button id="btn-factory-reset" class="btn-soft-rose hidden" data-action="factory-reset">
+              &#9888; Reset Database to Original Excel Snapshot
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== MODAL: ADMIN LOGIN ==================== -->
+  <div id="login-modal" class="modal-backdrop hidden">
+    <div class="modal-box" style="max-width:420px;">
+      <div class="modal-head">
+        <h3>Admin Authentication</h3>
+        <button class="btn-outline btn-xs" data-action="close-modal" data-modal="login-modal">&#10005;</button>
+      </div>
+      <form id="form-login">
+        <div class="modal-body" style="display:flex; flex-direction:column; gap:12px;">
+          <div id="login-error" class="hidden" style="padding:8px 12px; background:var(--rose-soft); color:#991b1b; border:1px solid var(--rose-border); border-radius:8px; font-size:0.8rem; font-weight:600;">
+            Invalid credentials. Use admin / admin123 or click One-Click Demo Login.
+          </div>
+          <div class="field">
+            <label>Admin Username</label>
+            <input type="text" id="login-user" value="admin" required />
+          </div>
+          <div class="field">
+            <label>Password</label>
+            <input type="password" id="login-pass" placeholder="Enter admin123" required />
+            <small style="color:var(--text-light); font-size:0.74rem;">Default: <strong>admin</strong> / <strong>admin123</strong></small>
+          </div>
+        </div>
+        <div class="modal-foot" style="justify-content:space-between;">
+          <button type="button" class="btn-outline" data-action="demo-login">One-Click Demo Admin Login</button>
+          <button type="submit" class="btn-primary">Login</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: HAND OVER / TRANSFER ==================== -->
+  <div id="handover-modal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>Hand Over / Transfer Serialized Asset (From &rarr; To)</h3>
+        <button class="btn-outline btn-xs" data-action="close-modal" data-modal="handover-modal">&#10005;</button>
+      </div>
+      <form id="form-handover">
+        <div class="modal-body" style="display:flex; flex-direction:column; gap:12px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="field">
+              <label>From (Current Holder)</label>
+              <select id="ho-from"></select>
+            </div>
+            <div class="field">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label>To (Receiving Officer / Store)</label>
+                <button type="button" class="btn-soft-amber btn-xs" data-action="ho-set-storage" style="padding:2px 6px; font-size:0.68rem;">&rarr; Internal Storage</button>
+              </div>
+              <select id="ho-to"></select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Select Serialized Asset Unit</label>
+            <select id="ho-asset" required></select>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="field">
+              <label>Condition at Handover</label>
+              <select id="ho-cond">
+                <option value="Good">Good</option>
+                <option value="Fair">Fair</option>
+                <option value="Needs Repair">Needs Repair</option>
+                <option value="Condemned">Condemned</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Authorized By</label>
+              <input type="text" id="ho-auth-by" value="Admin Officer (Trademark Div.)" required />
+            </div>
+          </div>
+          <div class="field">
+            <label>Handover / Transfer Reason &amp; File Reference</label>
+            <input type="text" id="ho-reason" required placeholder="e.g. Officer transfer / Reallocation / Returned to Internal Storage" />
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn-outline" data-action="close-modal" data-modal="handover-modal">Cancel</button>
+          <button type="submit" class="btn-indigo">&#10003; Complete Handover &amp; Generate Voucher</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: EDIT SERIAL / CONDITION / TRAIL ==================== -->
+  <div id="unit-detail-modal" class="modal-backdrop hidden">
+    <div class="modal-box wide">
+      <div class="modal-head">
+        <h3 id="ud-title">Asset Details &amp; Chain of Custody</h3>
+        <button class="btn-outline btn-xs" data-action="close-modal" data-modal="unit-detail-modal">&#10005;</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:14px;">
+        <div id="ud-admin-edit" class="assign-box hidden" style="margin-top:0;">
+          <strong style="font-size:0.84rem;">Update Manufacturer Serial Number, Condition &amp; Valuation</strong>
+          <form id="form-edit-unit" class="form-grid" style="margin-top:8px;">
+            <div class="field">
+              <label>Manufacturer Serial # (S/N)</label>
+              <input type="text" id="ud-sn" required />
+            </div>
+            <div class="field">
+              <label>Condition</label>
+              <select id="ud-cond">
+                <option value="Good">Good</option>
+                <option value="Fair">Fair</option>
+                <option value="Needs Repair">Needs Repair</option>
+                <option value="Condemned">Condemned</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Est. Value (LKR)</label>
+              <input type="number" id="ud-val" min="0" step="100" />
+            </div>
+            <div class="field" style="display:flex; align-items:flex-end;">
+              <button type="submit" class="btn-primary" style="width:100%;">Save Changes</button>
+            </div>
+          </form>
+        </div>
+
+        <div>
+          <strong style="font-size:0.86rem;">Chain-of-Custody History (From &rarr; To)</strong>
+          <div id="ud-history-list" style="margin-top:8px; display:flex; flex-direction:column; gap:8px;"></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn-outline" data-action="close-modal" data-modal="unit-detail-modal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: ASK CLARIFICATION ==================== -->
+  <div id="clarification-modal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>Ask Clarification / Handover Query</h3>
+        <button class="btn-outline btn-xs" data-action="close-modal" data-modal="clarification-modal">&#10005;</button>
+      </div>
+      <form id="form-clarification">
+        <div class="modal-body" style="display:flex; flex-direction:column; gap:12px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="field">
+              <label>Officer / Section Raising Query</label>
+              <select id="clar-person"></select>
+            </div>
+            <div class="field">
+              <label>Query Type</label>
+              <select id="clar-type">
+                <option value="Handover / Custody Verification">Handover / Custody Verification</option>
+                <option value="Serial Number / Asset Tag Check">Serial Number / Asset Tag Check</option>
+                <option value="Returned to Internal Storage">Returned to Internal Storage</option>
+                <option value="Condition / Repair Report">Condition / Repair Report</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Related Asset Tag (Optional)</label>
+            <select id="clar-asset"></select>
+          </div>
+          <div class="field">
+            <label>Clarification Question / Details</label>
+            <textarea id="clar-question" rows="3" required placeholder="Describe the clarification needed (e.g. 'Item was returned to Internal Storage on Tuesday, please confirm update')..."></textarea>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn-outline" data-action="close-modal" data-modal="clarification-modal">Cancel</button>
+          <button type="submit" class="btn-amber">Submit Clarification</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: RESOLVE CLARIFICATION ==================== -->
+  <div id="resolve-modal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>Official Clarification Response</h3>
+        <button class="btn-outline btn-xs" data-action="close-modal" data-modal="resolve-modal">&#10005;</button>
+      </div>
+      <form id="form-resolve">
+        <div class="modal-body" style="display:flex; flex-direction:column; gap:12px;">
+          <div id="resolve-summary" style="padding:10px; background:var(--amber-soft); border:1px solid var(--amber-border); border-radius:10px; font-size:0.82rem;"></div>
+          <div class="field">
+            <label>Official Admin Response &amp; Action Taken</label>
+            <textarea id="resolve-text" rows="3" required placeholder="Enter official verification response..."></textarea>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn-outline" data-action="close-modal" data-modal="resolve-modal">Cancel</button>
+          <button type="submit" class="btn-emerald">Mark Clarified &amp; Resolved</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: ADD PERSON / CATEGORY ==================== -->
+  <div id="add-entity-modal" class="modal-backdrop hidden">
+    <div class="modal-box" style="max-width:420px;">
+      <div class="modal-head">
+        <h3 id="add-entity-title">Add New Officer / Room</h3>
+        <button class="btn-outline btn-xs" data-action="close-modal" data-modal="add-entity-modal">&#10005;</button>
+      </div>
+      <form id="form-add-entity">
+        <div class="modal-body">
+          <div class="field">
+            <label id="add-entity-label">Name / Title</label>
+            <input type="text" id="add-entity-input" required />
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn-outline" data-action="close-modal" data-modal="add-entity-modal">Cancel</button>
+          <button type="submit" class="btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: PRINTABLE A4 SIGN-OFF & HANDOVER VOUCHER ==================== -->
+  <div id="print-modal" class="modal-backdrop hidden">
+    <div class="modal-box wide">
+      <div class="modal-head no-print">
+        <h3>Official A4 Inventory Summary &amp; Handover Sign-Off Sheet</h3>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-emerald btn-xs" data-action="print-modal-excel">&#128196; Download Excel (.xls)</button>
+          <button class="btn-primary btn-xs" data-action="trigger-browser-print">&#128424; Print A4 Sheet</button>
+          <button class="btn-outline btn-xs" data-action="close-modal" data-modal="print-modal">&#10005;</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div id="print-sheet-content" class="a4-sheet"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toast-container" class="toast-wrap"></div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // ==================== 1. EMBEDDED MASTER DATASET (36 EXCEL RECORDS + INTERNAL STORAGE) ====================
+      const INTERNAL_STORAGE_NAME = 'Internal Storage (Division Store)';
+      const STORAGE_KEY = 'nipo_trademark_inventory_v4';
+
+      const RAW_CATEGORIES = [
+        "Aluminium Pot", "Chair Gas/Cusion High Back", "Chair Gas/Cusion Meadium Back", "Chair Wood Wieker",
+        "Chair Cusion/Computer", "Chair Cusion/ Kantaleaver", "Chair- Rexing cusion/ Steel Frame",
+        "Chair Plastics with steel frame", "cabinet Steel", "CPU Sever", "Calling Bell", "Cupboard- glass Half Door",
+        "Date Stamp", "Dust Bin", "Fan Stand", "Fan Table", "File Rack Trolly", "File Tray wood/plastics",
+        "foot holder", "Glass Pad", "key Board", "Loker/ Cupboard/wood 4 Drawers", "ladder", "Lap top",
+        "Laptop Carring Bag", "Monitor", "Mouse", "Mouse Pad", "MultiPlug Soket", "Multi plug with extention code",
+        "Name Board", "Network Cables", "Paper weight", "pen holder", "Photocopy Machine", "Printer (black & White)",
+        "Printer (Colour)", "Puncher (large)", "Puncher (small)", "Rack -wood", "Rack -Steel", "Rack -KDK Wood",
+        "Re-Cargeble lamp", "Rain Suit", "Scissors", "stepler machine", "Steper Remover", "Stool Wood",
+        "Table wood /writing", "Table steel /writing", "Table KDK/wood /computer", "Table KDK wood /writing",
+        "Table KDK 'L' Shepe", "Telephon (Direct)", "Telephon (Parallel)", "Telephon Stand", "Tray Silver",
+        "UPS", "Wall Clock", "Water Boiler", "Water Dispenser", "white Board"
+      ];
+
+      const RAW_CUSTODIANS = [
+        { id: 1, name: "Director (Legal)", items: { "Chair Gas/Cusion High Back": 1, "Chair Wood Wieker": 1, "Chair Cusion/ Kantaleaver": 2, "CPU Sever": 1, "Calling Bell": 1, "Cupboard- glass Half Door": 1, "Dust Bin": 1, "Fan Stand": 1, "File Tray wood/plastics": 4, "foot holder": 1, "key Board": 1, "Lap top": 1, "Laptop Carring Bag": 1, "Monitor": 1, "Mouse": 1, "Multi plug with extention code": 1, "Paper weight": 1, "pen holder": 2, "Printer (black & White)": 1, "Puncher (small)": 1, "Rack -wood": 1, "Rack -KDK Wood": 1, "Scissors": 1, "stepler machine": 1, "Table wood /writing": 1, "Table KDK/wood /computer": 1, "Telephon (Direct)": 1, "Telephon (Parallel)": 1 } },
+        { id: 2, name: "AD I", items: { "Chair Gas/Cusion High Back": 1, "Chair Cusion/Computer": 1, "Chair Cusion/ Kantaleaver": 2, "CPU Sever": 1, "Cupboard- glass Half Door": 1, "Dust Bin": 1, "Fan Stand": 1, "File Tray wood/plastics": 2, "key Board": 1, "Lap top": 1, "Laptop Carring Bag": 1, "Monitor": 1, "Mouse": 1, "MultiPlug Soket": 1, "Multi plug with extention code": 1, "Printer (black & White)": 1, "Puncher (small)": 1, "Rack -wood": 1, "Rack -Steel": 1, "stepler machine": 1, "Stool Wood": 1, "Table KDK/wood /computer": 1, "Table KDK wood /writing": 1, "Telephon (Direct)": 1, "Telephon (Parallel)": 1, "UPS": 1 } },
+        { id: 3, name: "ADII", items: { "Chair Gas/Cusion High Back": 1, "Chair Cusion/ Kantaleaver": 2, "CPU Sever": 1, "Cupboard- glass Half Door": 1, "Dust Bin": 1, "Fan Table": 1, "File Tray wood/plastics": 2, "key Board": 1, "Lap top": 1, "Laptop Carring Bag": 1, "Monitor": 1, "Mouse": 1, "Printer (black & White)": 1, "Puncher (small)": 1, "Rack -wood": 3, "Scissors": 1, "stepler machine": 1, "Table wood /writing": 1, "Table KDK/wood /computer": 1, "Telephon (Direct)": 1, "Telephon (Parallel)": 1, "UPS": 1 } },
+        { id: 4, name: "AD III", items: { "Chair Gas/Cusion High Back": 1, "Chair Gas/Cusion Meadium Back": 2, "Chair- Rexing cusion/ Steel Frame": 1, "CPU Sever": 1, "Dust Bin": 1, "Fan Stand": 1, "File Tray wood/plastics": 1, "key Board": 1, "Lap top": 1, "Laptop Carring Bag": 1, "Monitor": 1, "Mouse": 1, "Printer (black & White)": 1, "Rack -Steel": 1, "Scissors": 1, "stepler machine": 1, "Table wood /writing": 1, "Table steel /writing": 1, "Table KDK/wood /computer": 1, "Telephon (Direct)": 1, "UPS": 1 } },
+        { id: 5, name: "AD Planinng", items: { "Chair Gas/Cusion High Back": 1, "Chair Cusion/ Kantaleaver": 2, "CPU Sever": 1, "Dust Bin": 1, "Fan Stand": 1, "key Board": 1, "Lap top": 1, "Laptop Carring Bag": 1, "Monitor": 1, "Mouse": 1, "Multi plug with extention code": 1, "Printer (black & White)": 1, "Puncher (small)": 1, "stepler machine": 1, "Table KDK/wood /computer": 1, "Table KDK wood /writing": 1, "Telephon (Direct)": 1, "Telephon (Parallel)": 1, "UPS": 1 } },
+        { id: 6, name: "Information Counter", items: { "Chair Gas/Cusion Meadium Back": 2, "Chair Plastics with steel frame": 4, "CPU Sever": 3, "Fan Table": 1, "key Board": 3, "Monitor": 6, "Mouse": 3, "Table KDK/wood /computer": 2, "Table KDK wood /writing": 3, "Telephon (Direct)": 1, "UPS": 3 } },
+        { id: 7, name: "N.M. Vithanage", items: { "Chair Gas/Cusion Meadium Back": 1, "CPU Sever": 1, "Dust Bin": 1, "Fan Stand": 1, "File Tray wood/plastics": 2, "key Board": 1, "Monitor": 1, "Mouse": 1, "Multi plug with extention code": 1, "Printer (black & White)": 1, "stepler machine": 1, "Table KDK 'L' Shepe": 1, "UPS": 1 } },
+        { id: 8, name: "M.D Princy", items: { "Chair Gas/Cusion Meadium Back": 1, "Chair Wood Wieker": 1, "CPU Sever": 1, "Dust Bin": 1, "Fan Stand": 1, "File Tray wood/plastics": 2, "key Board": 1, "Monitor": 1, "Mouse": 1, "MultiPlug Soket": 1, "Multi plug with extention code": 1, "Name Board": 1, "Printer (black & White)": 1, "Printer (Colour)": 1, "Puncher (small)": 1, "Scissors": 1, "stepler machine": 1, "Steper Remover": 1, "Table KDK 'L' Shepe": 1, "Telephon (Parallel)": 1, "UPS": 1 } },
+        { id: 9, name: "H.M.T. Deshanthi", items: { "Chair Gas/Cusion Meadium Back": 1, "Chair Wood Wieker": 1, "CPU Sever": 1, "Dust Bin": 1, "Fan Stand": 1, "File Tray wood/plastics": 1, "key Board": 1, "Monitor": 2, "Mouse": 1, "Multi plug with extention code": 1, "Printer (black & White)": 1, "Puncher (large)": 1, "Puncher (small)": 1, "Re-Cargeble lamp": 2, "Scissors": 1, "stepler machine": 1, "Steper Remover": 1, "Table KDK 'L' Shepe": 1, "Telephon (Parallel)": 1, "UPS": 1 } },
+        { id: 10, name: "Himasha Wimalarathna", items: { "Chair Gas/Cusion Meadium Back": 1, "CPU Sever": 1, "Dust Bin": 1, "Fan Stand": 1, "File Tray wood/plastics": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "Multi plug with extention code": 1, "Printer (black & White)": 1, "Puncher (small)": 1, "Rack -wood": 1, "Scissors": 1, "stepler machine": 1, "Table KDK 'L' Shepe": 1, "UPS": 1 } },
+        { id: 11, name: "Nadeeka Karunarathna", items: { "Chair Gas/Cusion Meadium Back": 1, "CPU Sever": 1, "Dust Bin": 1, "Fan Stand": 1, "foot holder": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "MultiPlug Soket": 1, "Multi plug with extention code": 1, "Printer (black & White)": 1, "Puncher (small)": 1, "Scissors": 1, "stepler machine": 1, "Table KDK 'L' Shepe": 1, "Telephon (Parallel)": 1, "UPS": 1 } },
+        { id: 12, name: "Achini Jayakody", items: { "Chair Gas/Cusion Meadium Back": 1, "CPU Sever": 1, "Dust Bin": 1, "Fan Stand": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "Multi plug with extention code": 1, "Printer (black & White)": 1, "Printer (Colour)": 1, "Puncher (small)": 1, "Scissors": 1, "stepler machine": 1, "Steper Remover": 1, "Table KDK 'L' Shepe": 1, "UPS": 1 } },
+        { id: 13, name: "Jayantha Rathnayeka", items: { "Chair Gas/Cusion Meadium Back": 1, "Chair Wood Wieker": 1, "CPU Sever": 1, "Dust Bin": 1, "Fan Stand": 1, "File Tray wood/plastics": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "Multi plug with extention code": 1, "Printer (black & White)": 1, "Puncher (small)": 1, "stepler machine": 1, "Table KDK 'L' Shepe": 1, "UPS": 1 } },
+        { id: 14, name: "Iroshini Piyarhathna", items: { "Chair Gas/Cusion Meadium Back": 1, "CPU Sever": 1, "Dust Bin": 1, "Fan Stand": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "MultiPlug Soket": 1, "Multi plug with extention code": 1, "Printer (black & White)": 1, "Puncher (small)": 1, "Scissors": 1, "stepler machine": 1, "Steper Remover": 1, "Telephon (Parallel)": 1, "Telephon Stand": 1, "UPS": 1 } },
+        { id: 15, name: "Sithara Jayakody", items: { "Chair Gas/Cusion Meadium Back": 1, "CPU Sever": 1, "Dust Bin": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "Multi plug with extention code": 1, "Printer (black & White)": 1, "Printer (Colour)": 1, "Puncher (small)": 1, "Scissors": 1, "stepler machine": 1, "UPS": 1 } },
+        { id: 16, name: "Priyanga manoharan", items: { "Chair Gas/Cusion Meadium Back": 1, "Chair Wood Wieker": 1, "CPU Sever": 1, "Dust Bin": 1, "File Tray wood/plastics": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "Mouse Pad": 1, "Multi plug with extention code": 1, "Printer (black & White)": 1, "Scissors": 1, "stepler machine": 1, "Telephon (Parallel)": 1 } },
+        { id: 17, name: "Sudheera Santhoshani", items: { "Chair Gas/Cusion Meadium Back": 1, "CPU Sever": 1, "Dust Bin": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "MultiPlug Soket": 1, "Multi plug with extention code": 1, "Printer (black & White)": 1, "Puncher (small)": 1, "Rack -KDK Wood": 1, "stepler machine": 1, "Table KDK 'L' Shepe": 1, "Telephon (Parallel)": 1, "UPS": 1 } },
+        { id: 18, name: "Nimashika Sandamali", items: { "Chair Gas/Cusion Meadium Back": 1, "CPU Sever": 1, "Dust Bin": 1, "foot holder": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "Multi plug with extention code": 1, "Printer (black & White)": 1, "Puncher (small)": 1, "stepler machine": 1, "Table KDK 'L' Shepe": 1, "Telephon (Parallel)": 1, "UPS": 1 } },
+        { id: 19, name: "Thilina Sandharuwan", items: { "Chair Gas/Cusion Meadium Back": 1, "CPU Sever": 1, "Dust Bin": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "MultiPlug Soket": 2, "Printer (black & White)": 1, "stepler machine": 1, "Table KDK/wood /computer": 1 } },
+        { id: 20, name: "Thilina Prabhaswara", items: { "Chair Gas/Cusion Meadium Back": 2, "CPU Sever": 1, "Dust Bin": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "Multi plug with extention code": 1, "Printer (black & White)": 1, "Puncher (small)": 1, "Scissors": 1, "stepler machine": 1, "Table KDK 'L' Shepe": 1, "UPS": 2 } },
+        { id: 21, name: "Kavith Chamika", items: { "Chair Gas/Cusion Meadium Back": 1, "CPU Sever": 1, "Dust Bin": 1, "Fan Stand": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "Printer (black & White)": 1, "Puncher (small)": 1, "Scissors": 1, "stepler machine": 1, "UPS": 1 } },
+        { id: 22, name: "Ravimini", items: { "Chair Gas/Cusion Meadium Back": 1, "Chair Wood Wieker": 1, "CPU Sever": 1, "Dust Bin": 1, "Monitor": 1, "Mouse": 1, "Printer (black & White)": 1, "stepler machine": 1, "UPS": 1 } },
+        { id: 23, name: "Madurangi", items: { "Chair Gas/Cusion Meadium Back": 1, "Chair Wood Wieker": 1, "Glass Pad": 1, "stepler machine": 1, "Table wood /writing": 1 } },
+        { id: 24, name: "Upekha", items: { "Chair Gas/Cusion Meadium Back": 1, "Chair Wood Wieker": 1, "CPU Sever": 1, "Dust Bin": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "Printer (black & White)": 1, "stepler machine": 1, "UPS": 1 } },
+        { id: 25, name: "Nayomi", items: { "Chair Gas/Cusion Meadium Back": 1, "CPU Sever": 1, "Dust Bin": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "Printer (black & White)": 1, "stepler machine": 1, "UPS": 1 } },
+        { id: 26, name: "Isuri", items: { "Chair Gas/Cusion Meadium Back": 1, "CPU Sever": 1, "Dust Bin": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "Printer (black & White)": 1, "Puncher (small)": 1, "stepler machine": 1, "UPS": 1 } },
+        { id: 27, name: "Syamali", items: { "Chair Gas/Cusion Meadium Back": 1, "CPU Sever": 1, "Dust Bin": 1, "Fan Stand": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "Printer (black & White)": 1, "Puncher (small)": 1, "stepler machine": 1, "UPS": 1 } },
+        { id: 28, name: "Shashila Dias", items: { "Chair Gas/Cusion Meadium Back": 1, "CPU Sever": 1, "Dust Bin": 1, "Fan Stand": 1, "key Board": 1, "Monitor": 1, "Mouse": 1, "Printer (black & White)": 1, "Puncher (small)": 1, "stepler machine": 1, "Telephon (Parallel)": 1, "UPS": 1 } },
+        { id: 29, name: "Charith Sadnaruwan", items: { "Chair Gas/Cusion Meadium Back": 1, "CPU Sever": 1, "Dust Bin": 1, "Table wood /writing": 1 } },
+        { id: 30, name: "Lasidhu Lakpriya", items: { "Dust Bin": 1, "Table wood /writing": 1 } },
+        { id: 31, name: "Thilini Perera", items: { "Fan Stand": 1, "Glass Pad": 1, "Puncher (large)": 1, "Table wood /writing": 1 } },
+        { id: 32, name: "Record Room I", items: { "Chair Wood Wieker": 3, "Chair Cusion/Computer": 1, "Dust Bin": 1, "Fan Stand": 1, "Puncher (small)": 1, "Telephon (Parallel)": 1 } },
+        { id: 33, name: "Record Room II", items: { "Chair Wood Wieker": 3, "File Rack Trolly": 1, "Table KDK/wood /computer": 1, "Telephon (Parallel)": 1 } },
+        { id: 34, name: "corridor", items: { "Chair Wood Wieker": 1, "Chair Cusion/Computer": 2, "cabinet Steel": 29, "Photocopy Machine": 1, "Rack -wood": 1, "Table wood /writing": 3 } },
+        { id: 35, name: "Traines AD III Room", items: { "Chair Gas/Cusion Meadium Back": 2, "Chair Wood Wieker": 2, "Monitor": 2, "Mouse": 2, "Table KDK/wood /computer": 3 } },
+        { id: 36, name: "Additional goods", items: { "Aluminium Pot": 1, "Calling Bell": 1, "Date Stamp": 2 } },
+        { id: 37, name: INTERNAL_STORAGE_NAME, items: {} }
+      ];
+
+      // ==================== 2. APPLICATION STATE ====================
+      let state = {
+        custodians: [],
+        categories: [],
+        units: [],
+        logs: [],
+        clarifications: [],
+        isAdmin: false,
+        selectedCustodianId: 1,
+        activeTab: 'custodians',
+        editingUnitTag: null,
+        resolvingClarId: null,
+        addEntityMode: 'person',
+        bannerContext: null,
+        printContext: null
+      };
+
+      // ==================== 3. HELPERS & ASSET CLASSIFICATION ====================
+      function escapeHtml(val) {
+        return String(val == null ? '' : val)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function nowFormatted() {
+        const d = new Date();
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) +
+          ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      }
+
+      function classifyItem(name) {
+        const n = name.toLowerCase();
+        if (/cpu|monitor|lap top|laptop|printer|photocopy|ups|key board|mouse|network/.test(n)) return 'IT & Computing';
+        if (/chair|table|cupboard|cabinet|rack|loker|stool/.test(n)) return 'Furniture & Storage';
+        if (/telephon|puncher|stepler|steper|stamp|bell|board|tray|pad|holder|weight|scissors/.test(n)) return 'Office Equipment';
+        return 'Appliances & Utilities';
+      }
+
+      function defaultValueFor(name) {
+        const n = name.toLowerCase();
+        if (/photocopy/.test(n)) return 385000;
+        if (/lap top/.test(n)) return 245000;
+        if (/cpu sever/.test(n)) return 165000;
+        if (/printer \(colour\)/.test(n)) return 95000;
+        if (/printer/.test(n)) return 68000;
+        if (/monitor/.test(n)) return 42000;
+        if (/ups/.test(n)) return 18500;
+        if (/cabinet steel/.test(n)) return 55000;
+        if (/cupboard|loker/.test(n)) return 48000;
+        if (/table/.test(n)) return 32000;
+        if (/chair/.test(n)) return 18000;
+        if (/fan/.test(n)) return 14500;
+        if (/telephon/.test(n)) return 8500;
+        return 3500;
+      }
+
+      function itemPrefix(name) {
+        const clean = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        return (clean.slice(0, 3) || 'AST').padEnd(3, 'X');
+      }
+
+      function nextTagFor(itemName, unitsList) {
+        const prefix = 'TM-' + itemPrefix(itemName) + '-';
+        let max = 0;
+        for (let i = 0; i < unitsList.length; i++) {
+          const tag = unitsList[i].assetTag;
+          if (tag.startsWith(prefix)) {
+            const num = parseInt(tag.slice(prefix.length), 10);
+            if (!isNaN(num) && num > max) max = num;
+          }
+        }
+        return prefix + String(max + 1).padStart(4, '0');
+      }
+
+      function isStorageCustodian(cust) {
+        if (!cust) return false;
+        return /internal storage|additional goods/i.test(cust.name);
+      }
+
+      function getStorageCustodian() {
+        let store = state.custodians.find(c => c.name === INTERNAL_STORAGE_NAME);
+        if (!store) {
+          const maxId = state.custodians.reduce((m, c) => Math.max(m, c.id), 0);
+          store = { id: maxId + 1, name: INTERNAL_STORAGE_NAME };
+          state.custodians.push(store);
+        }
+        return store;
+      }
+
+      function seedInitialDatabase() {
+        const custodians = RAW_CUSTODIANS.map(c => ({ id: c.id, name: c.name }));
+        const categories = RAW_CATEGORIES.slice();
+        const units = [];
+
+        RAW_CUSTODIANS.forEach(cust => {
+          Object.entries(cust.items).forEach(([itemName, qty]) => {
+            for (let i = 0; i < qty; i++) {
+              const assetTag = nextTagFor(itemName, units);
+              units.push({
+                assetTag,
+                serialNumber: 'SN-' + assetTag.replace('TM-', ''),
+                itemName,
+                assetClass: classifyItem(itemName),
+                holderId: cust.id,
+                condition: 'Good',
+                estValue: defaultValueFor(itemName),
+                remark: 'Baseline Trademark Division Register',
+                history: [
+                  {
+                    date: 'Baseline Register (2026)',
+                    action: 'INITIAL ALLOCATION',
+                    from: 'Trademark Division Store',
+                    to: cust.name,
+                    by: 'System Register',
+                    note: 'Imported from Inventry of the trademark Division.xlsx'
+                  }
+                ]
+              });
+            }
+          });
+        });
+
+        state.custodians = custodians;
+        state.categories = categories;
+        state.units = units;
+        state.logs = [];
+        state.clarifications = [];
+        state.selectedCustodianId = 1;
+        saveState();
+      }
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) {
+            seedInitialDatabase();
+            return;
+          }
+          const parsed = JSON.parse(raw);
+          if (!parsed || !Array.isArray(parsed.custodians) || !Array.isArray(parsed.units) || parsed.units.length === 0) {
+            seedInitialDatabase();
+            return;
+          }
+          state.custodians = parsed.custodians;
+          state.categories = Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : RAW_CATEGORIES.slice();
+          state.units = parsed.units;
+          state.logs = Array.isArray(parsed.logs) ? parsed.logs : [];
+          state.clarifications = Array.isArray(parsed.clarifications) ? parsed.clarifications : [];
+          getStorageCustodian();
+          if (!state.custodians.some(c => c.id === state.selectedCustodianId)) {
+            state.selectedCustodianId = state.custodians[0].id;
+          }
+        } catch (err) {
+          seedInitialDatabase();
+        }
+      }
+
+      function saveState() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            custodians: state.custodians,
+            categories: state.categories,
+            units: state.units,
+            logs: state.logs,
+            clarifications: state.clarifications
+          }));
+        } catch (err) {
+          showToast('Warning: Browser storage quota exceeded.', 'warn');
+        }
+      }
+
+      function getCustodianById(id) {
+        return state.custodians.find(c => c.id === Number(id));
+      }
+
+      function getUnitsForCustodian(custId) {
+        return state.units.filter(u => u.holderId === Number(custId));
+      }
+
+      function conditionBadgeHtml(cond) {
+        if (cond === 'Fair') return '<span class="badge badge-fair">Fair</span>';
+        if (cond === 'Needs Repair') return '<span class="badge badge-repair">Needs Repair</span>';
+        if (cond === 'Condemned') return '<span class="badge badge-condemned">Condemned</span>';
+        return '<span class="badge badge-good">Good</span>';
+      }
+
+      function showToast(msg, type = 'success') {
+        const wrap = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        el.className = 'toast ' + (type === 'error' ? 'error' : type === 'warn' ? 'warn' : '');
+        el.textContent = msg;
+        wrap.appendChild(el);
+        setTimeout(() => { el.remove(); }, 3500);
+      }
+
+      // ==================== 4. RENDERING FUNCTIONS ====================
+      function renderAll() {
+        updateAuthUI();
+        updateKpisAndPills();
+        populateCategoryDatalist();
+        renderDirectory();
+        renderCustodianProfile();
+        renderSerialTracker();
+        renderStorageView();
+        renderClarifications();
+        renderLogs();
+        renderAnalytics();
+      }
+
+      function updateAuthUI() {
+        const badge = document.getElementById('auth-badge');
+        const btnAuth = document.getElementById('btn-auth-toggle');
+        const adminOnlyIds = [
+          'btn-top-handover', 'btn-top-storage', 'admin-dir-tools',
+          'btn-prof-assign', 'btn-prof-handover', 'btn-prof-storage-issue',
+          'btn-storage-tab-issue', 'btn-clear-logs', 'btn-factory-reset'
+        ];
+
+        if (state.isAdmin) {
+          badge.className = 'badge badge-admin';
+          badge.textContent = 'Admin Mode Active';
+          btnAuth.className = 'btn-soft-rose';
+          btnAuth.innerHTML = '&#128275; Logout Admin';
+          adminOnlyIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('hidden');
+          });
+          document.getElementById('viewer-hint-bar').classList.add('hidden');
+        } else {
+          badge.className = 'badge badge-viewer';
+          badge.textContent = 'Viewer Mode';
+          btnAuth.className = 'btn-primary';
+          btnAuth.innerHTML = '&#128274; Admin Login';
+          adminOnlyIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('hidden');
+          });
+          document.getElementById('assign-panel').classList.add('hidden');
+          document.getElementById('viewer-hint-bar').classList.remove('hidden');
+        }
+      }
+
+      function updateKpisAndPills() {
+        const storageUnits = state.units.filter(u => isStorageCustodian(getCustodianById(u.holderId))).length;
+        const openClars = state.clarifications.filter(c => c.status === 'OPEN').length;
+
+        document.getElementById('kpi-custodians').textContent = state.custodians.length;
+        document.getElementById('kpi-units').textContent = state.units.length;
+        document.getElementById('kpi-categories').textContent = state.categories.length;
+        document.getElementById('kpi-storage').textContent = storageUnits;
+        document.getElementById('kpi-clarifications').textContent = openClars;
+
+        document.getElementById('pill-custodians').textContent = state.custodians.length;
+        document.getElementById('pill-serials').textContent = state.units.length;
+        document.getElementById('pill-storage').textContent = storageUnits;
+        document.getElementById('pill-clarifications').textContent = openClars;
+        document.getElementById('pill-logs').textContent = state.logs.length;
+      }
+
+      function populateCategoryDatalist() {
+        const dl = document.getElementById('datalist-categories');
+        dl.innerHTML = state.categories.map(c => `<option value="${escapeHtml(c)}"></option>`).join('');
+      }
+
+      function renderDirectory() {
+        const q = (document.getElementById('dir-search').value || '').trim().toLowerCase();
+        const filtered = state.custodians.filter(c => c.name.toLowerCase().includes(q));
+        document.getElementById('dir-filtered-count').textContent = filtered.length;
+
+        const list = document.getElementById('directory-list');
+        if (filtered.length === 0) {
+          list.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-light); font-size:0.82rem;">No matching officer or room.</div>';
+          return;
+        }
+
+        list.innerHTML = filtered.map(c => {
+          const count = getUnitsForCustodian(c.id).length;
+          const isSel = c.id === state.selectedCustodianId;
+          const isStore = isStorageCustodian(c);
+          return `
+            <button type="button" class="dir-item ${isSel ? 'selected' : ''}" data-action="select-custodian" data-id="${c.id}">
+              <div>
+                <span class="dir-name">#${c.id} ${escapeHtml(c.name)} ${isStore ? '<span class="badge badge-storage" style="font-size:0.65rem;">Store</span>' : ''}</span>
+                <span class="dir-meta">${count} serialized unit${count === 1 ? '' : 's'}</span>
+              </div>
+              <span class="badge ${isSel ? 'badge-tag' : 'badge-viewer'}">${count}</span>
+            </button>
+          `;
+        }).join('');
+      }
+
+      function renderCustodianProfile() {
+        const cust = getCustodianById(state.selectedCustodianId) || state.custodians[0];
+        if (!cust) return;
+        state.selectedCustodianId = cust.id;
+
+        const custUnits = getUnitsForCustodian(cust.id);
+        const distinctTypes = new Set(custUnits.map(u => u.itemName)).size;
+        const totalValue = custUnits.reduce((s, u) => s + (Number(u.estValue) || 0), 0);
+        const isStore = isStorageCustodian(cust);
+
+        document.getElementById('prof-record-badge').textContent = `Record #${cust.id}`;
+        document.getElementById('prof-role-badge').textContent = isStore ? 'Internal Storage / Reserve' : 'Officer / Division Section';
+        document.getElementById('prof-role-badge').className = isStore ? 'badge badge-storage' : 'badge badge-tag';
+        document.getElementById('prof-name').textContent = cust.name;
+        document.getElementById('assign-target-label').textContent = cust.name;
+        document.getElementById('prof-summary-line').innerHTML =
+          `<strong>${custUnits.length}</strong> serialized units across <strong>${distinctTypes}</strong> item types &bull; Est. Valuation: <strong>LKR ${totalValue.toLocaleString()}</strong>`;
+
+        const filterQ = (document.getElementById('prof-item-search').value || '').trim().toLowerCase();
+        const visibleUnits = custUnits.filter(u =>
+          !filterQ ||
+          u.assetTag.toLowerCase().includes(filterQ) ||
+          u.serialNumber.toLowerCase().includes(filterQ) ||
+          u.itemName.toLowerCase().includes(filterQ)
+        );
+
+        const tbody = document.getElementById('prof-units-tbody');
+        if (visibleUnits.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-light);">No serialized units assigned to ${escapeHtml(cust.name)}.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = visibleUnits.map((u, idx) => {
+          const safeTag = escapeHtml(u.assetTag);
+          const transfers = Math.max(0, u.history.length - 1);
+          return `
+            <tr>
+              <td style="color:var(--text-light); font-weight:600;">${idx + 1}</td>
+              <td><span class="badge badge-tag">${safeTag}</span></td>
+              <td class="mono" style="font-size:0.78rem;">${escapeHtml(u.serialNumber)}</td>
+              <td>
+                <div style="font-weight:700;">${escapeHtml(u.itemName)}</div>
+                <div style="font-size:0.72rem; color:var(--text-light);">${escapeHtml(u.remark || '')}</div>
+              </td>
+              <td>${conditionBadgeHtml(u.condition)}</td>
+              <td style="font-weight:600;">LKR ${(Number(u.estValue) || 0).toLocaleString()}</td>
+              <td style="text-align:right; white-space:nowrap;">
+                <button type="button" class="btn-outline btn-xs" data-action="open-unit-detail" data-tag="${safeTag}">
+                  Trail${transfers > 0 ? ` (${transfers})` : ''}
+                </button>
+                <button type="button" class="btn-soft-amber btn-xs" data-action="open-unit-clarification" data-tag="${safeTag}">
+                  Query
+                </button>
+                ${state.isAdmin ? `
+                  ${!isStore ? `<button type="button" class="btn-amber btn-xs" data-action="return-to-storage" data-tag="${safeTag}">To Storage</button>` : ''}
+                  <button type="button" class="btn-indigo btn-xs" data-action="transfer-unit" data-tag="${safeTag}">${isStore ? 'Issue Out' : 'Transfer'}</button>
+                  <button type="button" class="btn-soft-rose btn-xs" data-action="remove-unit" data-tag="${safeTag}">Remove</button>
+                ` : ''}
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      function renderSerialTracker() {
+        const q = (document.getElementById('serial-search').value || '').trim().toLowerCase();
+        const cond = document.getElementById('serial-cond-filter').value;
+
+        const filtered = state.units.filter(u => {
+          if (cond !== 'ALL' && u.condition !== cond) return false;
+          if (!q) return true;
+          const holder = getCustodianById(u.holderId);
+          const holderName = holder ? holder.name.toLowerCase() : '';
+          return (
+            u.assetTag.toLowerCase().includes(q) ||
+            u.serialNumber.toLowerCase().includes(q) ||
+            u.itemName.toLowerCase().includes(q) ||
+            holderName.includes(q)
+          );
+        });
+
+        const slice = filtered.slice(0, 200);
+        const tbody = document.getElementById('serial-tbody');
+        if (slice.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-light);">No matching serialized assets found.</td></tr>';
+        } else {
+          tbody.innerHTML = slice.map(u => {
+            const holder = getCustodianById(u.holderId);
+            const safeTag = escapeHtml(u.assetTag);
+            const transfers = Math.max(0, u.history.length - 1);
+            return `
+              <tr>
+                <td><span class="badge badge-tag">${safeTag}</span></td>
+                <td class="mono" style="font-size:0.78rem;">${escapeHtml(u.serialNumber)}</td>
+                <td style="font-weight:700;">${escapeHtml(u.itemName)}</td>
+                <td>
+                  <button type="button" class="btn-outline btn-xs" data-action="jump-custodian" data-id="${u.holderId}">
+                    ${escapeHtml(holder ? holder.name : 'Unknown')}
+                  </button>
+                </td>
+                <td>${conditionBadgeHtml(u.condition)}</td>
+                <td style="font-weight:700; color:${transfers > 0 ? 'var(--indigo)' : 'var(--text-light)'};">${transfers}</td>
+                <td style="text-align:right; white-space:nowrap;">
+                  <button type="button" class="btn-outline btn-xs" data-action="open-unit-detail" data-tag="${safeTag}">Trail / Edit S/N</button>
+                  <button type="button" class="btn-soft-amber btn-xs" data-action="open-unit-clarification" data-tag="${safeTag}">Query</button>
+                  ${state.isAdmin ? `<button type="button" class="btn-indigo btn-xs" data-action="transfer-unit" data-tag="${safeTag}">Hand Over</button>` : ''}
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+        document.getElementById('serial-footer').textContent = `Showing ${slice.length} of ${filtered.length} matching units (${state.units.length} total registered units).`;
+      }
+
+      function renderStorageView() {
+        const storageCusts = state.custodians.filter(c => isStorageCustodian(c));
+        const cardsWrap = document.getElementById('storage-summary-cards');
+        cardsWrap.innerHTML = storageCusts.map(c => {
+          const count = getUnitsForCustodian(c.id).length;
+          return `
+            <div class="kpi-card" style="background:var(--amber-soft); border-color:var(--amber-border);">
+              <div class="kpi-label" style="color:#92400e;">Storage Location</div>
+              <div style="font-weight:800; font-size:0.95rem; margin:4px 0;">${escapeHtml(c.name)}</div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+                <span class="badge badge-storage">${count} units in stock</span>
+                <button type="button" class="btn-outline btn-xs" data-action="jump-custodian" data-id="${c.id}">Open Profile &rarr;</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        const storageUnits = state.units.filter(u => isStorageCustodian(getCustodianById(u.holderId)));
+        const tbody = document.getElementById('storage-tbody');
+        if (storageUnits.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-light);">Internal Storage currently has 0 items. Use "To Storage" on any officer profile when an item is returned.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = storageUnits.map(u => {
+          const holder = getCustodianById(u.holderId);
+          const safeTag = escapeHtml(u.assetTag);
+          return `
+            <tr>
+              <td><span class="badge badge-tag">${safeTag}</span></td>
+              <td class="mono" style="font-size:0.78rem;">${escapeHtml(u.serialNumber)}</td>
+              <td style="font-weight:700;">${escapeHtml(u.itemName)}</td>
+              <td>${escapeHtml(holder ? holder.name : '')}</td>
+              <td>${conditionBadgeHtml(u.condition)}</td>
+              <td style="font-size:0.76rem; color:var(--text-muted);">${escapeHtml(u.remark || '')}</td>
+              <td style="text-align:right; white-space:nowrap;">
+                <button type="button" class="btn-outline btn-xs" data-action="open-unit-detail" data-tag="${safeTag}">Trail</button>
+                ${state.isAdmin ? `<button type="button" class="btn-amber btn-xs" data-action="transfer-unit" data-tag="${safeTag}">Issue to Officer</button>` : ''}
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      function renderClarifications() {
+        const filter = document.getElementById('clar-filter').value;
+        const list = state.clarifications.filter(c => filter === 'ALL' || c.status === filter);
+        const wrap = document.getElementById('clarifications-container');
+
+        if (list.length === 0) {
+          wrap.innerHTML = '<div style="text-align:center; padding:28px; color:var(--text-light); font-size:0.84rem;">No clarification queries recorded. Click <strong>+ Raise Clarification</strong> whenever an officer has a question about a handed-over utility.</div>';
+          return;
+        }
+
+        wrap.innerHTML = list.map(c => {
+          const isOpen = c.status === 'OPEN';
+          return `
+            <div style="border:1px solid ${isOpen ? 'var(--amber-border)' : 'var(--emerald-border)'}; background:${isOpen ? '#fffbeb' : '#f0fdf4'}; border-radius:12px; padding:14px; margin-bottom:10px;">
+              <div style="display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; margin-bottom:6px;">
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <span class="badge badge-tag">${escapeHtml(c.id)}</span>
+                  <span class="badge ${isOpen ? 'badge-fair' : 'badge-good'}">${isOpen ? 'Open / Pending' : 'Clarified & Resolved'}</span>
+                  <strong style="font-size:0.86rem;">${escapeHtml(c.personName)}</strong>
+                  ${c.assetTag ? `<span class="badge badge-viewer mono">${escapeHtml(c.assetTag)}</span>` : ''}
+                </div>
+                <span style="font-size:0.74rem; color:var(--text-light);">${escapeHtml(c.timestamp)}</span>
+              </div>
+              <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); margin-bottom:4px;">Category: ${escapeHtml(c.type)}</div>
+              <div style="background:#fff; border:1px solid var(--border); border-radius:8px; padding:10px; font-size:0.84rem;">${escapeHtml(c.question)}</div>
+              ${c.response ? `
+                <div style="margin-top:8px; background:#ecfdf5; border:1px solid var(--emerald-border); border-radius:8px; padding:10px; font-size:0.82rem; color:#065f46;">
+                  <strong>Official Admin Clarification (${escapeHtml(c.resolvedAt)}):</strong><br/>${escapeHtml(c.response)}
+                </div>
+              ` : ''}
+              ${state.isAdmin ? `
+                <div style="margin-top:8px; text-align:right;">
+                  <button type="button" class="btn-emerald btn-xs" data-action="open-resolve" data-id="${escapeHtml(c.id)}">
+                    ${isOpen ? 'Reply & Resolve' : 'Edit Official Response'}
+                  </button>
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('');
+      }
+
+      function renderLogs() {
+        const wrap = document.getElementById('logs-container');
+        if (state.logs.length === 0) {
+          wrap.innerHTML = '<div style="text-align:center; padding:28px; color:var(--text-light); font-size:0.84rem;">No custody movements or updates logged yet.</div>';
+          return;
+        }
+
+        wrap.innerHTML = state.logs.map((log, idx) => `
+          <div style="border:1px solid var(--border); background:#f8fafc; border-radius:12px; padding:12px 14px; margin-bottom:10px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px;">
+            <div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
+                <span class="badge badge-tag">${escapeHtml(log.actionType)}</span>
+                ${log.assetTag ? `<span class="badge badge-viewer mono">${escapeHtml(log.assetTag)}</span>` : ''}
+                <strong style="font-size:0.86rem;">${escapeHtml(log.custodianName)}</strong>
+                <span style="font-size:0.74rem; color:var(--text-light);">&bull; ${escapeHtml(log.timestamp)}</span>
+              </div>
+              <div style="font-size:0.83rem; color:var(--text);">${escapeHtml(log.summary)}</div>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button type="button" class="btn-emerald btn-xs" data-action="log-excel" data-index="${idx}">Excel (.xls)</button>
+              <button type="button" class="btn-outline btn-xs" data-action="log-print" data-index="${idx}">Print Voucher</button>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      function renderAnalytics() {
+        // 1. Top 10 Holders
+        const ranked = state.custodians.map(c => ({
+          name: c.name,
+          count: getUnitsForCustodian(c.id).length
+        })).sort((a, b) => b.count - a.count).slice(0, 10);
+        const maxCount = Math.max(1, ranked[0] ? ranked[0].count : 1);
+
+        document.getElementById('chart-top-holders').innerHTML = ranked.map(r => `
+          <div class="bar-row">
+            <div class="bar-label"><span>${escapeHtml(r.name)}</span><span>${r.count} units</span></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${Math.round((r.count / maxCount) * 100)}%;"></div></div>
+          </div>
+        `).join('');
+
+        // 2. Classes & Valuation
+        const classMap = {};
+        let grandVal = 0;
+        state.units.forEach(u => {
+          const val = Number(u.estValue) || 0;
+          grandVal += val;
+          if (!classMap[u.assetClass]) classMap[u.assetClass] = { count: 0, val: 0 };
+          classMap[u.assetClass].count++;
+          classMap[u.assetClass].val += val;
+        });
+
+        document.getElementById('chart-classes').innerHTML = `
+          <div style="margin-bottom:12px; padding:10px; background:var(--emerald-soft); border:1px solid var(--emerald-border); border-radius:10px;">
+            <div style="font-size:0.74rem; font-weight:700; color:#065f46;">ESTIMATED DIVISION PORTFOLIO VALUE</div>
+            <div style="font-size:1.3rem; font-weight:800; color:#064e3b;">LKR ${grandVal.toLocaleString()}</div>
+          </div>
+          ${Object.entries(classMap).map(([cls, info]) => `
+            <div class="bar-row">
+              <div class="bar-label"><span>${escapeHtml(cls)} (${info.count})</span><span>LKR ${info.val.toLocaleString()}</span></div>
+              <div class="bar-track"><div class="bar-fill" style="background:var(--emerald); width:${Math.round((info.count / Math.max(1, state.units.length)) * 100)}%;"></div></div>
+            </div>
+          `).join('')}
+        `;
+
+        // 3. Conditions
+        const condCounts = { 'Good': 0, 'Fair': 0, 'Needs Repair': 0, 'Condemned': 0 };
+        state.units.forEach(u => { condCounts[u.condition] = (condCounts[u.condition] || 0) + 1; });
+        const condColors = { 'Good': '#059669', 'Fair': '#d97706', 'Needs Repair': '#ea580c', 'Condemned': '#dc2626' };
+
+        document.getElementById('chart-conditions').innerHTML = Object.entries(condCounts).map(([cName, cnt]) => `
+          <div class="bar-row">
+            <div class="bar-label"><span>${cName}</span><span>${cnt} units (${((cnt / Math.max(1, state.units.length)) * 100).toFixed(1)}%)</span></div>
+            <div class="bar-track"><div class="bar-fill" style="background:${condColors[cName]}; width:${Math.round((cnt / Math.max(1, state.units.length)) * 100)}%;"></div></div>
+          </div>
+        `).join('');
+      }
+
+      // ==================== 5. WORKFLOW ACTIONS ====================
+      function switchTab(tabId) {
+        state.activeTab = tabId;
+        ['custodians', 'serials', 'storage', 'clarifications', 'logs', 'analytics'].forEach(t => {
+          document.getElementById('tab-' + t).classList.toggle('hidden', t !== tabId);
+        });
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.tab === tabId);
+        });
+      }
+
+      function triggerPostUpdateBanner(custodianId, summary, voucher = null) {
+        const cust = getCustodianById(custodianId);
+        if (!cust) return;
+        state.bannerContext = { custodianId: cust.id, summary, voucher };
+        document.getElementById('banner-title').textContent = summary;
+        document.getElementById('banner-sub').textContent = `Updated inventory ready for ${cust.name}. Download Excel sign-off sheet or print A4 voucher now.`;
+        document.getElementById('post-update-banner').classList.remove('hidden');
+      }
+
+      function appendLog(custodianId, actionType, summary, assetTag = '', voucher = null) {
+        const cust = getCustodianById(custodianId);
+        state.logs.unshift({
+          timestamp: nowFormatted(),
+          custodianId,
+          custodianName: cust ? cust.name : 'Division',
+          actionType,
+          summary,
+          assetTag,
+          voucher
+        });
+        saveState();
+        triggerPostUpdateBanner(custodianId, summary, voucher);
+      }
+
+      function openHandoverModal(fromCustId = null, preselectedTag = null, toCustId = null) {
+        if (!state.isAdmin) {
+          openModal('login-modal');
+          return;
+        }
+        const fromSel = document.getElementById('ho-from');
+        const toSel = document.getElementById('ho-to');
+        const opts = state.custodians.map(c =>
+          `<option value="${c.id}">#${c.id} — ${escapeHtml(c.name)} (${getUnitsForCustodian(c.id).length} units)</option>`
+        ).join('');
+        fromSel.innerHTML = opts;
+        toSel.innerHTML = opts;
+
+        fromSel.value = fromCustId || state.selectedCustodianId;
+        if (toCustId) {
+          toSel.value = toCustId;
+        } else {
+          const alt = state.custodians.find(c => c.id !== Number(fromSel.value)) || state.custodians[0];
+          toSel.value = alt.id;
+        }
+        document.getElementById('ho-reason').value = '';
+        populateHandoverUnits(preselectedTag);
+        openModal('handover-modal');
+      }
+
+      function populateHandoverUnits(preselectedTag = null) {
+        const fromId = Number(document.getElementById('ho-from').value);
+        const units = getUnitsForCustodian(fromId);
+        const sel = document.getElementById('ho-asset');
+        if (units.length === 0) {
+          sel.innerHTML = '<option value="">-- No units held by selected sender --</option>';
+          return;
+        }
+        sel.innerHTML = units.map(u =>
+          `<option value="${escapeHtml(u.assetTag)}">[${escapeHtml(u.assetTag)}] ${escapeHtml(u.itemName)} (S/N: ${escapeHtml(u.serialNumber)})</option>`
+        ).join('');
+        if (preselectedTag && units.some(u => u.assetTag === preselectedTag)) {
+          sel.value = preselectedTag;
+        }
+      }
+
+      function openUnitDetailModal(tag) {
+        const unit = state.units.find(u => u.assetTag === tag);
+        if (!unit) return;
+        const holder = getCustodianById(unit.holderId);
+        state.editingUnitTag = tag;
+        document.getElementById('ud-title').textContent = `${unit.assetTag} — ${unit.itemName} (Held by ${holder ? holder.name : ''})`;
+
+        const editBox = document.getElementById('ud-admin-edit');
+        if (state.isAdmin) {
+          editBox.classList.remove('hidden');
+          document.getElementById('ud-sn').value = unit.serialNumber;
+          document.getElementById('ud-cond').value = unit.condition;
+          document.getElementById('ud-val').value = unit.estValue || 0;
+        } else {
+          editBox.classList.add('hidden');
+        }
+
+        const histWrap = document.getElementById('ud-history-list');
+        histWrap.innerHTML = unit.history.slice().reverse().map(h => `
+          <div style="border:1px solid var(--border); background:#f8fafc; border-radius:10px; padding:10px;">
+            <div style="display:flex; justify-content:space-between; font-size:0.74rem; color:var(--text-light);">
+              <strong>${escapeHtml(h.action)}</strong>
+              <span>${escapeHtml(h.date)}</span>
+            </div>
+            <div style="font-size:0.83rem; font-weight:700; margin:3px 0;">
+              From: ${escapeHtml(h.from)} &rarr; To: <span style="color:var(--primary);">${escapeHtml(h.to)}</span>
+            </div>
+            <div style="font-size:0.76rem; color:var(--text-muted);">${escapeHtml(h.note)} (By: ${escapeHtml(h.by)})</div>
+          </div>
+        `).join('');
+
+        openModal('unit-detail-modal');
+      }
+
+      function openClarificationModal(personId = null, assetTag = '') {
+        const pSel = document.getElementById('clar-person');
+        pSel.innerHTML = state.custodians.map(c => `<option value="${c.id}">#${c.id} — ${escapeHtml(c.name)}</option>`).join('');
+        pSel.value = personId || state.selectedCustodianId;
+        document.getElementById('clar-question').value = '';
+        populateClarificationAssets(assetTag);
+        openModal('clarification-modal');
+      }
+
+      function populateClarificationAssets(preTag = '') {
+        const pId = Number(document.getElementById('clar-person').value);
+        const units = getUnitsForCustodian(pId);
+        const aSel = document.getElementById('clar-asset');
+        const opts = ['<option value="">-- General / Not tied to a single asset --</option>'].concat(
+          units.map(u => `<option value="${escapeHtml(u.assetTag)}">[${escapeHtml(u.assetTag)}] ${escapeHtml(u.itemName)} (S/N: ${escapeHtml(u.serialNumber)})</option>`)
+        );
+        if (preTag && !units.some(u => u.assetTag === preTag)) {
+          const found = state.units.find(u => u.assetTag === preTag);
+          if (found) opts.splice(1, 0, `<option value="${escapeHtml(found.assetTag)}">[${escapeHtml(found.assetTag)}] ${escapeHtml(found.itemName)}</option>`);
+        }
+        aSel.innerHTML = opts.join('');
+        if (preTag) aSel.value = preTag;
+      }
+
+      function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+      function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+      // ==================== 6. NATIVE EXCEL (.XLS XML SPREADSHEET) & A4 PRINT GENERATOR ====================
+      function xmlEscape(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function buildExcelWorksheetXml(sheetName, rows) {
+        const safeName = xmlEscape(sheetName.slice(0, 31));
+        const rowsXml = rows.map((row, rIdx) => {
+          const cellsXml = row.map(cell => {
+            const isNum = typeof cell === 'number' && !isNaN(cell);
+            const styleAttr = rIdx === 0 ? ' ss:StyleID="Title"' : (rIdx === 3 || rIdx === 6 ? ' ss:StyleID="Header"' : '');
+            return `<Cell${styleAttr}><Data ss:Type="${isNum ? 'Number' : 'String'}">${xmlEscape(cell)}</Data></Cell>`;
+          }).join('');
+          return `<Row>${cellsXml}</Row>`;
+        }).join('');
+        return `<Worksheet ss:Name="${safeName}"><Table>${rowsXml}</Table></Worksheet>`;
+      }
+
+      function downloadWorkbookXml(filename, sheets) {
+        const xml = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal"><Font ss:FontName="Calibri" ss:Size="11"/></Style>
+  <Style ss:ID="Title"><Font ss:FontName="Calibri" ss:Size="13" ss:Bold="1"/></Style>
+  <Style ss:ID="Header"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/></Style>
+ </Styles>
+ ${sheets.map(s => buildExcelWorksheetXml(s.name, s.rows)).join('')}
+</Workbook>`;
+
+        const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function downloadCustodianExcel(custodianId, note = '', voucher = null) {
+        const cust = getCustodianById(custodianId);
+        if (!cust) return;
+        const units = getUnitsForCustodian(cust.id);
+        const dateStr = nowFormatted();
+
+        const sheet1Rows = [
+          ['NATIONAL INTELLECTUAL PROPERTY OFFICE (SRI LANKA) — TRADEMARK DIVISION'],
+          ['INDIVIDUAL OFFICER / LOCATION INVENTORY SUMMARY & HANDOVER SIGN-OFF SHEET'],
+          [],
+          ['Officer / Location:', cust.name, 'Record ID:', '#' + cust.id, 'Generated:', dateStr],
+          ['Total Assigned Units:', units.length, 'Latest Action:', note || 'Standard Verification'],
+          []
+        ];
+
+        if (voucher) {
+          sheet1Rows.push(['CUSTODY TRANSFER VOUCHER DETAILS']);
+          sheet1Rows.push(['Asset Tag:', voucher.assetTag, 'Serial #:', voucher.serialNumber, 'Product:', voucher.itemName]);
+          sheet1Rows.push(['Handed Over From:', voucher.fromName, 'Received By:', voucher.toName, 'Reason:', voucher.reason]);
+          sheet1Rows.push([]);
+        }
+
+        sheet1Rows.push(['S/N', 'Division Asset Tag', 'Manufacturer Serial #', 'Utility Description', 'Condition', 'Est. Value (LKR)']);
+        if (units.length === 0) {
+          sheet1Rows.push(['-', '-', '-', 'No utilities currently assigned', '-', 0]);
+        } else {
+          units.forEach((u, i) => {
+            sheet1Rows.push([i + 1, u.assetTag, u.serialNumber, u.itemName, u.condition, Number(u.estValue) || 0]);
+          });
+        }
+        const totalVal = units.reduce((s, u) => s + (Number(u.estValue) || 0), 0);
+        sheet1Rows.push(['', '', '', 'TOTAL ASSIGNED UNITS & VALUE', units.length, totalVal]);
+        sheet1Rows.push([]);
+        sheet1Rows.push(['Declaration: We confirm physical handover and custody verification of the above serialized items.']);
+        sheet1Rows.push([]);
+        sheet1Rows.push(['Handed Over / Prepared By: ______________________', '', 'Received By (Officer Sign): ______________________', '', 'Authorized By: ______________________']);
+
+        const sheet2Rows = [
+          ['Asset Tag', 'Serial #', 'Item Name', 'Date', 'Action', 'From', 'To', 'Authorized By', 'Note']
+        ];
+        units.forEach(u => {
+          u.history.forEach(h => {
+            sheet2Rows.push([u.assetTag, u.serialNumber, u.itemName, h.date, h.action, h.from, h.to, h.by, h.note]);
+          });
+        });
+
+        const safeName = cust.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+        downloadWorkbookXml(`${safeName}_Inventory_SignOff.xls`, [
+          { name: 'Summary & Sign-Off', rows: sheet1Rows },
+          { name: 'Custody History', rows: sheet2Rows }
+        ]);
+        showToast(`Excel Sign-Off Sheet downloaded for ${cust.name}.`);
+      }
+
+      function exportMasterAuditExcel() {
+        // Sheet 1: All Custodians Matrix
+        const header = ['S/N', 'Utility Description', ...state.custodians.map(c => c.name), 'TOTAL'];
+        const matrixRows = [
+          ['TRADEMARK DIVISION — MASTER INVENTORY MATRIX'],
+          ['Generated:', nowFormatted()],
+          [],
+          header
+        ];
+        state.categories.forEach((cat, idx) => {
+          let rowTotal = 0;
+          const counts = state.custodians.map(c => {
+            const cnt = state.units.filter(u => u.holderId === c.id && u.itemName === cat).length;
+            rowTotal += cnt;
+            return cnt;
+          });
+          matrixRows.push([idx + 1, cat, ...counts, rowTotal]);
+        });
+
+        // Sheet 2: All Serialized Units
+        const unitsRows = [
+          ['Asset Tag', 'Serial #', 'Item Description', 'Class', 'Current Holder', 'Condition', 'Est. Value (LKR)', 'Remark']
+        ];
+        state.units.forEach(u => {
+          const h = getCustodianById(u.holderId);
+          unitsRows.push([u.assetTag, u.serialNumber, u.itemName, u.assetClass, h ? h.name : '', u.condition, Number(u.estValue) || 0, u.remark]);
+        });
+
+        // Sheet 3: Internal Storage
+        const storeRows = [['Asset Tag', 'Serial #', 'Item Description', 'Location', 'Condition', 'Remark']];
+        state.units.filter(u => isStorageCustodian(getCustodianById(u.holderId))).forEach(u => {
+          const h = getCustodianById(u.holderId);
+          storeRows.push([u.assetTag, u.serialNumber, u.itemName, h ? h.name : '', u.condition, u.remark]);
+        });
+
+        // Sheet 4: Custody Log
+        const logRows = [['Timestamp', 'Action Type', 'Asset Tag', 'Custodian', 'Summary']];
+        state.logs.forEach(l => logRows.push([l.timestamp, l.actionType, l.assetTag || '-', l.custodianName, l.summary]));
+
+        // Sheet 5: Clarifications
+        const clarRows = [['Ticket ID', 'Timestamp', 'Officer', 'Asset Tag', 'Type', 'Question', 'Status', 'Official Response']];
+        state.clarifications.forEach(c => clarRows.push([c.id, c.timestamp, c.personName, c.assetTag || '-', c.type, c.question, c.status, c.response || 'Pending']));
+
+        downloadWorkbookXml('Trademark_Division_Master_Audit_Workbook.xls', [
+          { name: 'All Custodians Summary', rows: matrixRows },
+          { name: 'All Serialized Units', rows: unitsRows },
+          { name: 'Internal Storage', rows: storeRows },
+          { name: 'Custody Transfer Log', rows: logRows },
+          { name: 'Clarifications Log', rows: clarRows }
+        ]);
+        showToast('5-Sheet Master Audit Workbook (.xls) downloaded.');
+      }
+
+      function openPrintSheet(custodianId, note = '', voucher = null) {
+        const cust = getCustodianById(custodianId);
+        if (!cust) return;
+        const units = getUnitsForCustodian(cust.id);
+        state.printContext = { custodianId: cust.id, note, voucher };
+
+        const voucherHtml = voucher ? `
+          <div style="border:2px solid #1e3a8a; background:#eff6ff; padding:10px 12px; border-radius:8px; margin:12px 0; font-size:0.78rem;">
+            <div style="font-weight:800; color:#1e3a8a; margin-bottom:4px;">OFFICIAL CUSTODY TRANSFER / HANDOVER VOUCHER (${escapeHtml(voucher.assetTag)})</div>
+            <div><strong>From:</strong> ${escapeHtml(voucher.fromName)} &nbsp;&rarr;&nbsp; <strong>To:</strong> ${escapeHtml(voucher.toName)}</div>
+            <div><strong>Item:</strong> ${escapeHtml(voucher.itemName)} (S/N: ${escapeHtml(voucher.serialNumber)}) &bull; <strong>Condition:</strong> ${escapeHtml(voucher.condition)}</div>
+            <div><strong>Reason:</strong> ${escapeHtml(voucher.reason)}</div>
+          </div>
+        ` : '';
+
+        const rowsHtml = units.length === 0
+          ? '<tr><td colspan="5" style="text-align:center;">No serialized utilities currently assigned.</td></tr>'
+          : units.map((u, idx) => `
+              <tr>
+                <td style="text-align:center;">${idx + 1}</td>
+                <td class="mono" style="font-weight:700;">${escapeHtml(u.assetTag)}</td>
+                <td class="mono">${escapeHtml(u.serialNumber)}</td>
+                <td>${escapeHtml(u.itemName)}</td>
+                <td style="text-align:center;">${escapeHtml(u.condition)}</td>
+              </tr>
+            `).join('');
+
+        document.getElementById('print-sheet-content').innerHTML = `
+          <div style="text-align:center; border-bottom:2px solid #0f172a; padding-bottom:10px; margin-bottom:12px;">
+            <div style="font-size:0.74rem; font-weight:700; letter-spacing:0.06em;">NATIONAL INTELLECTUAL PROPERTY OFFICE (SRI LANKA)</div>
+            <div style="font-size:1.15rem; font-weight:800; margin-top:2px;">TRADEMARK DIVISION — ASSET HANDOVER &amp; INVENTORY SIGN-OFF SHEET</div>
+          </div>
+          ${voucherHtml}
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; background:#f8fafc; border:1px solid #94a3b8; padding:10px; border-radius:6px; font-size:0.8rem; margin-bottom:12px;">
+            <div><strong>Officer / Location:</strong> ${escapeHtml(cust.name)} (#${cust.id})</div>
+            <div style="text-align:right;"><strong>Date &amp; Time:</strong> ${escapeHtml(nowFormatted())}</div>
+            <div><strong>Total Serialized Units:</strong> ${units.length}</div>
+            <div style="text-align:right;"><strong>Latest Action:</strong> ${escapeHtml(note || 'Inventory Verification')}</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width:36px; text-align:center;">S/N</th>
+                <th style="width:120px;">Asset Tag</th>
+                <th style="width:130px;">Serial #</th>
+                <th>Utility / Equipment Description</th>
+                <th style="width:95px; text-align:center;">Condition</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+          <p style="font-size:0.75rem; font-style:italic; margin-top:14px;">
+            Declaration: We hereby confirm the physical handover and verification of the above serialized Trademark Division utilities in the stated condition.
+          </p>
+          <div class="sig-grid">
+            <div class="sig-line"><strong>Handed Over / Prepared By</strong><br/>Signature &amp; Date</div>
+            <div class="sig-line"><strong>Received By (Officer Signature)</strong><br/>Signature &amp; Date</div>
+            <div class="sig-line"><strong>Authorized By (Director / Admin)</strong><br/>Signature &amp; Date</div>
+          </div>
+        `;
+        openModal('print-modal');
+      }
+
+      // ==================== 7. CENTRAL EVENT DELEGATION & FORM HANDLERS ====================
+      document.addEventListener('click', function (e) {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const action = btn.dataset.action;
+
+        if (action === 'switch-tab') {
+          switchTab(btn.dataset.tab);
+        } else if (action === 'select-custodian') {
+          state.selectedCustodianId = Number(btn.dataset.id);
+          renderDirectory();
+          renderCustodianProfile();
+        } else if (action === 'jump-custodian') {
+          state.selectedCustodianId = Number(btn.dataset.id);
+          switchTab('custodians');
+          renderDirectory();
+          renderCustodianProfile();
+        } else if (action === 'toggle-auth') {
+          if (state.isAdmin) {
+            state.isAdmin = false;
+            renderAll();
+            showToast('Logged out of Admin Mode.', 'warn');
+          } else {
+            openModal('login-modal');
+          }
+        } else if (action === 'open-login') {
+          openModal('login-modal');
+        } else if (action === 'demo-login') {
+          state.isAdmin = true;
+          closeModal('login-modal');
+          renderAll();
+          showToast('Demo Admin Mode activated!');
+        } else if (action === 'close-modal') {
+          closeModal(btn.dataset.modal);
+        } else if (action === 'toggle-assign-panel') {
+          document.getElementById('assign-panel').classList.toggle('hidden');
+        } else if (action === 'open-handover') {
+          openHandoverModal();
+        } else if (action === 'open-handover-selected') {
+          openHandoverModal(state.selectedCustodianId);
+        } else if (action === 'open-storage-issue') {
+          const store = getStorageCustodian();
+          const firstOfficer = state.custodians.find(c => !isStorageCustodian(c)) || state.custodians[0];
+          openHandoverModal(store.id, null, firstOfficer.id);
+          document.getElementById('ho-reason').value = 'Issued from Internal Storage to officer';
+        } else if (action === 'open-storage-issue-selected') {
+          const store = getStorageCustodian();
+          openHandoverModal(store.id, null, state.selectedCustodianId);
+          document.getElementById('ho-reason').value = 'Issued from Internal Storage to officer';
+        } else if (action === 'ho-set-storage') {
+          const store = getStorageCustodian();
+          document.getElementById('ho-to').value = store.id;
+          if (!document.getElementById('ho-reason').value.trim()) {
+            document.getElementById('ho-reason').value = 'Returned to Internal Storage (Division Store)';
+          }
+        } else if (action === 'transfer-unit') {
+          const tag = btn.dataset.tag;
+          const unit = state.units.find(u => u.assetTag === tag);
+          if (unit) openHandoverModal(unit.holderId, tag);
+        } else if (action === 'return-to-storage') {
+          const tag = btn.dataset.tag;
+          const unit = state.units.find(u => u.assetTag === tag);
+          const store = getStorageCustodian();
+          if (unit && store) {
+            openHandoverModal(unit.holderId, tag, store.id);
+            document.getElementById('ho-reason').value = 'Returned by officer to Internal Storage (Division Store)';
+          }
+        } else if (action === 'remove-unit') {
+          if (!state.isAdmin) return;
+          const tag = btn.dataset.tag;
+          const idx = state.units.findIndex(u => u.assetTag === tag);
+          if (idx === -1) return;
+          const unit = state.units[idx];
+          const holder = getCustodianById(unit.holderId);
+          state.units.splice(idx, 1);
+          appendLog(unit.holderId, 'REMOVED', `Removed ${unit.itemName} [${unit.assetTag}] from ${holder ? holder.name : ''}`, unit.assetTag);
+          renderAll();
+          showToast(`Removed ${unit.assetTag}. Download updated sign-off sheet from top banner.`);
+        } else if (action === 'open-unit-detail') {
+          openUnitDetailModal(btn.dataset.tag);
+        } else if (action === 'open-clarification') {
+          openClarificationModal();
+        } else if (action === 'open-unit-clarification') {
+          const tag = btn.dataset.tag;
+          const unit = state.units.find(u => u.assetTag === tag);
+          openClarificationModal(unit ? unit.holderId : state.selectedCustodianId, tag);
+        } else if (action === 'open-resolve') {
+          const clar = state.clarifications.find(c => c.id === btn.dataset.id);
+          if (!clar) return;
+          state.resolvingClarId = clar.id;
+          document.getElementById('resolve-summary').innerHTML = `<strong>${escapeHtml(clar.id)}</strong> (${escapeHtml(clar.personName)}): ${escapeHtml(clar.question)}`;
+          document.getElementById('resolve-text').value = clar.response || '';
+          openModal('resolve-modal');
+        } else if (action === 'download-selected-excel') {
+          downloadCustodianExcel(state.selectedCustodianId);
+        } else if (action === 'print-selected-sheet') {
+          openPrintSheet(state.selectedCustodianId);
+        } else if (action === 'download-storage-excel') {
+          downloadCustodianExcel(getStorageCustodian().id, 'Internal Storage Stock Register');
+        } else if (action === 'print-storage-sheet') {
+          openPrintSheet(getStorageCustodian().id, 'Internal Storage Stock Register');
+        } else if (action === 'export-master-excel') {
+          exportMasterAuditExcel();
+        } else if (action === 'banner-download-excel' && state.bannerContext) {
+          downloadCustodianExcel(state.bannerContext.custodianId, state.bannerContext.summary, state.bannerContext.voucher);
+        } else if (action === 'banner-print-sheet' && state.bannerContext) {
+          openPrintSheet(state.bannerContext.custodianId, state.bannerContext.summary, state.bannerContext.voucher);
+        } else if (action === 'dismiss-banner') {
+          document.getElementById('post-update-banner').classList.add('hidden');
+        } else if (action === 'print-modal-excel' && state.printContext) {
+          downloadCustodianExcel(state.printContext.custodianId, state.printContext.note, state.printContext.voucher);
+        } else if (action === 'trigger-browser-print') {
+          window.print();
+        } else if (action === 'log-excel') {
+          const log = state.logs[Number(btn.dataset.index)];
+          if (log) downloadCustodianExcel(log.custodianId, log.summary, log.voucher);
+        } else if (action === 'log-print') {
+          const log = state.logs[Number(btn.dataset.index)];
+          if (log) openPrintSheet(log.custodianId, log.summary, log.voucher);
+        } else if (action === 'clear-logs') {
+          state.logs = [];
+          saveState();
+          renderAll();
+          showToast('Audit log cleared.', 'warn');
+        } else if (action === 'open-add-person') {
+          state.addEntityMode = 'person';
+          document.getElementById('add-entity-title').textContent = 'Add New Officer or Room Location';
+          document.getElementById('add-entity-label').textContent = 'Officer Name / Room Title';
+          document.getElementById('add-entity-input').value = '';
+          openModal('add-entity-modal');
+        } else if (action === 'open-add-category') {
+          state.addEntityMode = 'category';
+          document.getElementById('add-entity-title').textContent = 'Add New Utility Category';
+          document.getElementById('add-entity-label').textContent = 'Equipment / Utility Name';
+          document.getElementById('add-entity-input').value = '';
+          openModal('add-entity-modal');
+        } else if (action === 'export-json-backup') {
+          const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'NIPO_Trademark_Inventory_Backup.json';
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast('JSON backup exported.');
+        } else if (action === 'factory-reset') {
+          seedInitialDatabase();
+          renderAll();
+          showToast('Reset complete: All 37 custodians & original Excel records restored.');
+        }
+      });
+
+      // Form Submissions
+      document.getElementById('form-login').addEventListener('submit', function (e) {
+        e.preventDefault();
+        const u = document.getElementById('login-user').value.trim().toLowerCase();
+        const p = document.getElementById('login-pass').value;
+        if (u === 'admin' && p === 'admin123') {
+          state.isAdmin = true;
+          document.getElementById('login-error').classList.add('hidden');
+          closeModal('login-modal');
+          renderAll();
+          showToast('Admin Mode unlocked!');
+        } else {
+          document.getElementById('login-error').classList.remove('hidden');
+        }
+      });
+
+      document.getElementById('form-assign-utility').addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!state.isAdmin) return;
+        const cust = getCustodianById(state.selectedCustodianId);
+        const itemName = document.getElementById('assign-item-name').value.trim();
+        const qty = parseInt(document.getElementById('assign-qty').value, 10) || 1;
+        const customSn = document.getElementById('assign-sn').value.trim();
+        const cond = document.getElementById('assign-cond').value;
+        const valInput = document.getElementById('assign-val').value;
+        const remark = document.getElementById('assign-remark').value.trim() || 'Admin Stock Issuance';
+        if (!cust || !itemName) return;
+
+        if (!state.categories.some(c => c.toLowerCase() === itemName.toLowerCase())) {
+          state.categories.push(itemName);
+        }
+        const estVal = valInput ? parseInt(valInput, 10) : defaultValueFor(itemName);
+        const createdTags = [];
+        const ts = nowFormatted();
+
+        for (let i = 0; i < qty; i++) {
+          const tag = nextTagFor(itemName, state.units);
+          createdTags.push(tag);
+          state.units.push({
+            assetTag: tag,
+            serialNumber: customSn ? (qty > 1 ? `${customSn}-${i + 1}` : customSn) : 'SN-' + tag.replace('TM-', ''),
+            itemName,
+            assetClass: classifyItem(itemName),
+            holderId: cust.id,
+            condition: cond,
+            estValue: estVal,
+            remark,
+            history: [{
+              date: ts,
+              action: 'NEW ISSUANCE',
+              from: 'Division Procurement / Store',
+              to: cust.name,
+              by: 'Admin',
+              note: remark
+            }]
+          });
+        }
+
+        document.getElementById('assign-item-name').value = '';
+        document.getElementById('assign-sn').value = '';
+        document.getElementById('assign-remark').value = '';
+        appendLog(cust.id, 'ASSIGNED', `Issued ${qty}x ${itemName} (${createdTags.join(', ')}) to ${cust.name}`, createdTags[0]);
+        renderAll();
+        showToast(`Issued ${qty}x ${itemName} to ${cust.name}.`);
+      });
+
+      document.getElementById('ho-from').addEventListener('change', function () {
+        populateHandoverUnits();
+      });
+
+      document.getElementById('form-handover').addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!state.isAdmin) return;
+        const fromId = Number(document.getElementById('ho-from').value);
+        const toId = Number(document.getElementById('ho-to').value);
+        const tag = document.getElementById('ho-asset').value;
+        const cond = document.getElementById('ho-cond').value;
+        const authBy = document.getElementById('ho-auth-by').value.trim() || 'Admin';
+        const reason = document.getElementById('ho-reason').value.trim();
+
+        if (!tag) return showToast('Select a serialized unit to transfer.', 'error');
+        if (fromId === toId) return showToast('Sender and Receiver must be different.', 'error');
+
+        const unit = state.units.find(u => u.assetTag === tag);
+        const fromCust = getCustodianById(fromId);
+        const toCust = getCustodianById(toId);
+        if (!unit || !fromCust || !toCust) return;
+
+        const ts = nowFormatted();
+        unit.holderId = toCust.id;
+        unit.condition = cond;
+        unit.remark = reason;
+        unit.history.push({
+          date: ts,
+          action: isStorageCustodian(toCust) ? 'RETURNED TO STORAGE' : 'HANDOVER TRANSFER',
+          from: fromCust.name,
+          to: toCust.name,
+          by: authBy,
+          note: reason
+        });
+
+        const voucher = {
+          assetTag: unit.assetTag,
+          serialNumber: unit.serialNumber,
+          itemName: unit.itemName,
+          fromName: fromCust.name,
+          toName: toCust.name,
+          condition: cond,
+          reason
+        };
+
+        const isReturn = isStorageCustodian(toCust) && !isStorageCustodian(fromCust);
+        const targetProfileId = isReturn ? fromCust.id : toCust.id;
+        state.selectedCustodianId = targetProfileId;
+
+        const summary = isReturn
+          ? `Returned ${unit.itemName} [${unit.assetTag}] from ${fromCust.name} to ${toCust.name}`
+          : `Handed Over ${unit.itemName} [${unit.assetTag}] from ${fromCust.name} to ${toCust.name}`;
+
+        closeModal('handover-modal');
+        appendLog(targetProfileId, isReturn ? 'STORAGE_RETURN' : 'HANDOVER', summary, unit.assetTag, voucher);
+        renderAll();
+        showToast(summary);
+      });
+
+      document.getElementById('form-edit-unit').addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!state.isAdmin || !state.editingUnitTag) return;
+        const unit = state.units.find(u => u.assetTag === state.editingUnitTag);
+        if (!unit) return;
+        unit.serialNumber = document.getElementById('ud-sn').value.trim() || unit.serialNumber;
+        unit.condition = document.getElementById('ud-cond').value;
+        unit.estValue = parseInt(document.getElementById('ud-val').value, 10) || 0;
+        saveState();
+        closeModal('unit-detail-modal');
+        renderAll();
+        showToast(`Updated serial & condition for ${unit.assetTag}.`);
+      });
+
+      document.getElementById('clar-person').addEventListener('change', function () {
+        populateClarificationAssets();
+      });
+
+      document.getElementById('form-clarification').addEventListener('submit', function (e) {
+        e.preventDefault();
+        const pId = Number(document.getElementById('clar-person').value);
+        const cust = getCustodianById(pId);
+        const type = document.getElementById('clar-type').value;
+        const assetTag = document.getElementById('clar-asset').value;
+        const question = document.getElementById('clar-question').value.trim();
+        if (!cust || !question) return;
+
+        const ticket = {
+          id: 'CLR-' + String(state.clarifications.length + 1).padStart(3, '0'),
+          timestamp: nowFormatted(),
+          personId: cust.id,
+          personName: cust.name,
+          type,
+          assetTag,
+          question,
+          status: 'OPEN',
+          response: '',
+          resolvedAt: ''
+        };
+        state.clarifications.unshift(ticket);
+        saveState();
+        closeModal('clarification-modal');
+        switchTab('clarifications');
+        renderAll();
+        showToast(`Clarification ${ticket.id} submitted.`);
+      });
+
+      document.getElementById('form-resolve').addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!state.isAdmin || !state.resolvingClarId) return;
+        const clar = state.clarifications.find(c => c.id === state.resolvingClarId);
+        if (!clar) return;
+        clar.response = document.getElementById('resolve-text').value.trim();
+        clar.status = 'RESOLVED';
+        clar.resolvedAt = nowFormatted();
+        saveState();
+        closeModal('resolve-modal');
+        renderAll();
+        showToast(`Clarification ${clar.id} marked Resolved.`);
+      });
+
+      document.getElementById('form-add-entity').addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!state.isAdmin) return;
+        const val = document.getElementById('add-entity-input').value.trim();
+        if (!val) return;
+        if (state.addEntityMode === 'person') {
+          const maxId = state.custodians.reduce((m, c) => Math.max(m, c.id), 0);
+          const newCust = { id: maxId + 1, name: val };
+          state.custodians.push(newCust);
+          state.selectedCustodianId = newCust.id;
+          showToast(`Added custodian "${val}".`);
+        } else {
+          if (!state.categories.some(c => c.toLowerCase() === val.toLowerCase())) {
+            state.categories.push(val);
+            showToast(`Added utility category "${val}".`);
+          }
+        }
+        saveState();
+        closeModal('add-entity-modal');
+        renderAll();
+      });
+
+      document.getElementById('import-json-input').addEventListener('change', function (e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function (ev) {
+          try {
+            const data = JSON.parse(ev.target.result);
+            if (Array.isArray(data.custodians) && Array.isArray(data.units)) {
+              state.custodians = data.custodians;
+              state.categories = data.categories || RAW_CATEGORIES.slice();
+              state.units = data.units;
+              state.logs = data.logs || [];
+              state.clarifications = data.clarifications || [];
+              saveState();
+              renderAll();
+              showToast('Database restored from JSON backup.');
+            } else {
+              showToast('Invalid JSON backup structure.', 'error');
+            }
+          } catch (err) {
+            showToast('Could not read JSON file.', 'error');
+          }
+        };
+        reader.readAsText(file);
+      });
+
+      // Live Search & Filter Inputs
+      document.getElementById('dir-search').addEventListener('input', renderDirectory);
+      document.getElementById('prof-item-search').addEventListener('input', renderCustodianProfile);
+      document.getElementById('serial-search').addEventListener('input', renderSerialTracker);
+      document.getElementById('serial-cond-filter').addEventListener('change', renderSerialTracker);
+      document.getElementById('clar-filter').addEventListener('change', renderClarifications);
+
+      // Boot Immediately
+      loadState();
+      renderAll();
+    })();
+  </script>
+</body>
+</html>
