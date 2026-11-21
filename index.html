@@ -504,24 +504,72 @@
       font-size: 0.75rem;
     }
 
+    /* A4 on-screen preview */
+    .a4-sheet { width: 100%; max-width: 210mm; margin: 0 auto; box-shadow: var(--shadow); }
+    .a4-sheet table { table-layout: fixed; }
+    .a4-sheet table th {
+      white-space: normal;
+      background: #e2e8f0;
+      color: #0f172a;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 0.76rem;
+    }
+    .a4-sheet table th, .a4-sheet table td { overflow-wrap: anywhere; word-break: break-word; }
+    .a4-sheet table tr:hover td { background: transparent; }
+
+    /* ===== PRINT: true A4 portrait, multi-page safe ===== */
+    @page { size: A4 portrait; margin: 12mm; }
+
     @media print {
-      body * { visibility: hidden !important; }
-      #print-modal, #print-modal * { visibility: visible !important; }
-      #print-modal {
-        position: fixed !important;
-        inset: 0 !important;
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body {
+        background: #fff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+      }
+      /* Remove everything except the sheet from layout (no blank pages) */
+      body > *:not(#print-modal) { display: none !important; }
+
+      #print-modal:not(.hidden) {
+        display: block !important;
+        position: static !important;
+        inset: auto !important;
         background: #fff !important;
         padding: 0 !important;
         overflow: visible !important;
       }
       #print-modal .modal-box {
-        max-width: 100% !important;
+        display: block !important;
+        max-width: none !important;
+        width: 100% !important;
         max-height: none !important;
+        overflow: visible !important;
         box-shadow: none !important;
         border: none !important;
+        border-radius: 0 !important;
       }
+      #print-modal .modal-body { padding: 0 !important; overflow: visible !important; }
       .no-print { display: none !important; }
-      .a4-sheet { border: none !important; padding: 8mm !important; }
+
+      .a4-sheet {
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        font-size: 10pt;
+      }
+      .a4-sheet table { width: 100% !important; table-layout: fixed; border-collapse: collapse; }
+      .a4-sheet thead { display: table-header-group; }      /* repeat header on every page */
+      .a4-sheet tr, .a4-sheet .sig-grid, .a4-sheet .voucher-box { break-inside: avoid; page-break-inside: avoid; }
+      .a4-sheet table th, .a4-sheet table td { font-size: 9pt !important; padding: 4px 6px !important; }
+      .sig-grid { margin-top: 18mm; }
     }
   </style>
 </head>
@@ -727,10 +775,6 @@
                     <option value="Needs Repair">Needs Repair</option>
                   </select>
                 </div>
-                <div class="field">
-                  <label>Est. Value (LKR)</label>
-                  <input type="number" id="assign-val" min="0" step="100" placeholder="Auto-estimated" />
-                </div>
                 <div class="field" style="grid-column: span 2;">
                   <label>Voucher / Allocation Remark</label>
                   <input type="text" id="assign-remark" placeholder="e.g. New Stock Issuance / File Ref #2026" />
@@ -759,7 +803,6 @@
                   <th>Manufacturer S/N</th>
                   <th>Utility Description</th>
                   <th>Condition</th>
-                  <th>Est. Value</th>
                   <th style="text-align:right;">Actions</th>
                 </tr>
               </thead>
@@ -895,7 +938,7 @@
           <div id="chart-top-holders" class="card-body"></div>
         </div>
         <div class="card">
-          <div class="card-header"><strong>Asset Distribution by Equipment Class &amp; Valuation</strong></div>
+          <div class="card-header"><strong>Asset Distribution by Equipment Class</strong></div>
           <div id="chart-classes" class="card-body"></div>
         </div>
         <div class="card">
@@ -1019,8 +1062,12 @@
       </div>
       <div class="modal-body" style="display:flex; flex-direction:column; gap:14px;">
         <div id="ud-admin-edit" class="assign-box hidden" style="margin-top:0;">
-          <strong style="font-size:0.84rem;">Update Manufacturer Serial Number, Condition &amp; Valuation</strong>
+          <strong style="font-size:0.84rem;">Edit Item Details (Admin)</strong>
           <form id="form-edit-unit" class="form-grid" style="margin-top:8px;">
+            <div class="field" style="grid-column:1/-1;">
+              <label>Item / Utility Name</label>
+              <input type="text" id="ud-name" list="datalist-categories" required />
+            </div>
             <div class="field">
               <label>Manufacturer Serial # (S/N)</label>
               <input type="text" id="ud-sn" required />
@@ -1035,11 +1082,20 @@
               </select>
             </div>
             <div class="field">
-              <label>Est. Value (LKR)</label>
-              <input type="number" id="ud-val" min="0" step="100" />
+              <label>Asset Class</label>
+              <select id="ud-class">
+                <option>IT &amp; Computing</option>
+                <option>Furniture &amp; Storage</option>
+                <option>Office Equipment</option>
+                <option>Appliances &amp; Utilities</option>
+              </select>
             </div>
-            <div class="field" style="display:flex; align-items:flex-end;">
-              <button type="submit" class="btn-primary" style="width:100%;">Save Changes</button>
+            <div class="field" style="grid-column:1/-1;">
+              <label>Remark / Notes</label>
+              <input type="text" id="ud-remark" placeholder="e.g. Screen scratched, replaced battery..." />
+            </div>
+            <div class="field" style="grid-column:1/-1; display:flex; justify-content:flex-end;">
+              <button type="submit" class="btn-primary">Save Changes</button>
             </div>
           </form>
         </div>
@@ -1265,24 +1321,6 @@
         return 'Appliances & Utilities';
       }
 
-      function defaultValueFor(name) {
-        const n = name.toLowerCase();
-        if (/photocopy/.test(n)) return 385000;
-        if (/lap top/.test(n)) return 245000;
-        if (/cpu sever/.test(n)) return 165000;
-        if (/printer \(colour\)/.test(n)) return 95000;
-        if (/printer/.test(n)) return 68000;
-        if (/monitor/.test(n)) return 42000;
-        if (/ups/.test(n)) return 18500;
-        if (/cabinet steel/.test(n)) return 55000;
-        if (/cupboard|loker/.test(n)) return 48000;
-        if (/table/.test(n)) return 32000;
-        if (/chair/.test(n)) return 18000;
-        if (/fan/.test(n)) return 14500;
-        if (/telephon/.test(n)) return 8500;
-        return 3500;
-      }
-
       function itemPrefix(name) {
         const clean = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
         return (clean.slice(0, 3) || 'AST').padEnd(3, 'X');
@@ -1332,7 +1370,6 @@
                 assetClass: classifyItem(itemName),
                 holderId: cust.id,
                 condition: 'Good',
-                estValue: defaultValueFor(itemName),
                 remark: 'Baseline Trademark Division Register',
                 history: [
                   {
@@ -1525,7 +1562,6 @@
 
         const custUnits = getUnitsForCustodian(cust.id);
         const distinctTypes = new Set(custUnits.map(u => u.itemName)).size;
-        const totalValue = custUnits.reduce((s, u) => s + (Number(u.estValue) || 0), 0);
         const isStore = isStorageCustodian(cust);
 
         document.getElementById('prof-record-badge').textContent = `Record #${cust.id}`;
@@ -1534,7 +1570,7 @@
         document.getElementById('prof-name').textContent = cust.name;
         document.getElementById('assign-target-label').textContent = cust.name;
         document.getElementById('prof-summary-line').innerHTML =
-          `<strong>${custUnits.length}</strong> serialized units across <strong>${distinctTypes}</strong> item types &bull; Est. Valuation: <strong>LKR ${totalValue.toLocaleString()}</strong>`;
+          `<strong>${custUnits.length}</strong> serialized units across <strong>${distinctTypes}</strong> item types`;
 
         const filterQ = (document.getElementById('prof-item-search').value || '').trim().toLowerCase();
         const visibleUnits = custUnits.filter(u =>
@@ -1546,7 +1582,7 @@
 
         const tbody = document.getElementById('prof-units-tbody');
         if (visibleUnits.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-light);">No serialized units assigned to ${escapeHtml(cust.name)}.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:24px; color:var(--text-light);">No serialized units assigned to ${escapeHtml(cust.name)}.</td></tr>`;
           return;
         }
 
@@ -1563,7 +1599,6 @@
                 <div style="font-size:0.72rem; color:var(--text-light);">${escapeHtml(u.remark || '')}</div>
               </td>
               <td>${conditionBadgeHtml(u.condition)}</td>
-              <td style="font-weight:600;">LKR ${(Number(u.estValue) || 0).toLocaleString()}</td>
               <td style="text-align:right; white-space:nowrap;">
                 <button type="button" class="btn-outline btn-xs" data-action="open-unit-detail" data-tag="${safeTag}">
                   Trail${transfers > 0 ? ` (${transfers})` : ''}
@@ -1572,6 +1607,7 @@
                   Query
                 </button>
                 ${state.isAdmin ? `
+                  <button type="button" class="btn-primary btn-xs" data-action="open-unit-detail" data-tag="${safeTag}">&#9998; Edit</button>
                   ${!isStore ? `<button type="button" class="btn-amber btn-xs" data-action="return-to-storage" data-tag="${safeTag}">To Storage</button>` : ''}
                   <button type="button" class="btn-indigo btn-xs" data-action="transfer-unit" data-tag="${safeTag}">${isStore ? 'Issue Out' : 'Transfer'}</button>
                   <button type="button" class="btn-soft-rose btn-xs" data-action="remove-unit" data-tag="${safeTag}">Remove</button>
@@ -1621,7 +1657,7 @@
                 <td>${conditionBadgeHtml(u.condition)}</td>
                 <td style="font-weight:700; color:${transfers > 0 ? 'var(--indigo)' : 'var(--text-light)'};">${transfers}</td>
                 <td style="text-align:right; white-space:nowrap;">
-                  <button type="button" class="btn-outline btn-xs" data-action="open-unit-detail" data-tag="${safeTag}">Trail / Edit S/N</button>
+                  <button type="button" class="btn-outline btn-xs" data-action="open-unit-detail" data-tag="${safeTag}">${state.isAdmin ? '&#9998; Edit / Trail' : 'Trail'}</button>
                   <button type="button" class="btn-soft-amber btn-xs" data-action="open-unit-clarification" data-tag="${safeTag}">Query</button>
                   ${state.isAdmin ? `<button type="button" class="btn-indigo btn-xs" data-action="transfer-unit" data-tag="${safeTag}">Hand Over</button>` : ''}
                 </td>
@@ -1668,7 +1704,7 @@
               <td>${conditionBadgeHtml(u.condition)}</td>
               <td style="font-size:0.76rem; color:var(--text-muted);">${escapeHtml(u.remark || '')}</td>
               <td style="text-align:right; white-space:nowrap;">
-                <button type="button" class="btn-outline btn-xs" data-action="open-unit-detail" data-tag="${safeTag}">Trail</button>
+                <button type="button" class="btn-outline btn-xs" data-action="open-unit-detail" data-tag="${safeTag}">${state.isAdmin ? '&#9998; Edit / Trail' : 'Trail'}</button>
                 ${state.isAdmin ? `<button type="button" class="btn-amber btn-xs" data-action="transfer-unit" data-tag="${safeTag}">Issue to Officer</button>` : ''}
               </td>
             </tr>
@@ -1759,29 +1795,18 @@
           </div>
         `).join('');
 
-        // 2. Classes & Valuation
+        // 2. Classes
         const classMap = {};
-        let grandVal = 0;
         state.units.forEach(u => {
-          const val = Number(u.estValue) || 0;
-          grandVal += val;
-          if (!classMap[u.assetClass]) classMap[u.assetClass] = { count: 0, val: 0 };
-          classMap[u.assetClass].count++;
-          classMap[u.assetClass].val += val;
+          classMap[u.assetClass] = (classMap[u.assetClass] || 0) + 1;
         });
 
-        document.getElementById('chart-classes').innerHTML = `
-          <div style="margin-bottom:12px; padding:10px; background:var(--emerald-soft); border:1px solid var(--emerald-border); border-radius:10px;">
-            <div style="font-size:0.74rem; font-weight:700; color:#065f46;">ESTIMATED DIVISION PORTFOLIO VALUE</div>
-            <div style="font-size:1.3rem; font-weight:800; color:#064e3b;">LKR ${grandVal.toLocaleString()}</div>
+        document.getElementById('chart-classes').innerHTML = Object.entries(classMap).map(([cls, cnt]) => `
+          <div class="bar-row">
+            <div class="bar-label"><span>${escapeHtml(cls)}</span><span>${cnt} units (${((cnt / Math.max(1, state.units.length)) * 100).toFixed(1)}%)</span></div>
+            <div class="bar-track"><div class="bar-fill" style="background:var(--emerald); width:${Math.round((cnt / Math.max(1, state.units.length)) * 100)}%;"></div></div>
           </div>
-          ${Object.entries(classMap).map(([cls, info]) => `
-            <div class="bar-row">
-              <div class="bar-label"><span>${escapeHtml(cls)} (${info.count})</span><span>LKR ${info.val.toLocaleString()}</span></div>
-              <div class="bar-track"><div class="bar-fill" style="background:var(--emerald); width:${Math.round((info.count / Math.max(1, state.units.length)) * 100)}%;"></div></div>
-            </div>
-          `).join('')}
-        `;
+        `).join('');
 
         // 3. Conditions
         const condCounts = { 'Good': 0, 'Fair': 0, 'Needs Repair': 0, 'Condemned': 0 };
@@ -1882,9 +1907,11 @@
         const editBox = document.getElementById('ud-admin-edit');
         if (state.isAdmin) {
           editBox.classList.remove('hidden');
+          document.getElementById('ud-name').value = unit.itemName;
           document.getElementById('ud-sn').value = unit.serialNumber;
           document.getElementById('ud-cond').value = unit.condition;
-          document.getElementById('ud-val').value = unit.estValue || 0;
+          document.getElementById('ud-class').value = unit.assetClass || classifyItem(unit.itemName);
+          document.getElementById('ud-remark').value = unit.remark || '';
         } else {
           editBox.classList.add('hidden');
         }
@@ -2003,16 +2030,15 @@
           sheet1Rows.push([]);
         }
 
-        sheet1Rows.push(['S/N', 'Division Asset Tag', 'Manufacturer Serial #', 'Utility Description', 'Condition', 'Est. Value (LKR)']);
+        sheet1Rows.push(['S/N', 'Division Asset Tag', 'Manufacturer Serial #', 'Utility Description', 'Condition']);
         if (units.length === 0) {
-          sheet1Rows.push(['-', '-', '-', 'No utilities currently assigned', '-', 0]);
+          sheet1Rows.push(['-', '-', '-', 'No utilities currently assigned', '-']);
         } else {
           units.forEach((u, i) => {
-            sheet1Rows.push([i + 1, u.assetTag, u.serialNumber, u.itemName, u.condition, Number(u.estValue) || 0]);
+            sheet1Rows.push([i + 1, u.assetTag, u.serialNumber, u.itemName, u.condition]);
           });
         }
-        const totalVal = units.reduce((s, u) => s + (Number(u.estValue) || 0), 0);
-        sheet1Rows.push(['', '', '', 'TOTAL ASSIGNED UNITS & VALUE', units.length, totalVal]);
+        sheet1Rows.push(['', '', '', 'TOTAL ASSIGNED UNITS', units.length]);
         sheet1Rows.push([]);
         sheet1Rows.push(['Declaration: We confirm physical handover and custody verification of the above serialized items.']);
         sheet1Rows.push([]);
@@ -2056,11 +2082,11 @@
 
         // Sheet 2: All Serialized Units
         const unitsRows = [
-          ['Asset Tag', 'Serial #', 'Item Description', 'Class', 'Current Holder', 'Condition', 'Est. Value (LKR)', 'Remark']
+          ['Asset Tag', 'Serial #', 'Item Description', 'Class', 'Current Holder', 'Condition', 'Remark']
         ];
         state.units.forEach(u => {
           const h = getCustodianById(u.holderId);
-          unitsRows.push([u.assetTag, u.serialNumber, u.itemName, u.assetClass, h ? h.name : '', u.condition, Number(u.estValue) || 0, u.remark]);
+          unitsRows.push([u.assetTag, u.serialNumber, u.itemName, u.assetClass, h ? h.name : '', u.condition, u.remark]);
         });
 
         // Sheet 3: Internal Storage
@@ -2095,7 +2121,7 @@
         state.printContext = { custodianId: cust.id, note, voucher };
 
         const voucherHtml = voucher ? `
-          <div style="border:2px solid #1e3a8a; background:#eff6ff; padding:10px 12px; border-radius:8px; margin:12px 0; font-size:0.78rem;">
+          <div class="voucher-box" style="border:2px solid #1e3a8a; background:#eff6ff; padding:10px 12px; border-radius:8px; margin:12px 0; font-size:0.78rem;">
             <div style="font-weight:800; color:#1e3a8a; margin-bottom:4px;">OFFICIAL CUSTODY TRANSFER / HANDOVER VOUCHER (${escapeHtml(voucher.assetTag)})</div>
             <div><strong>From:</strong> ${escapeHtml(voucher.fromName)} &nbsp;&rarr;&nbsp; <strong>To:</strong> ${escapeHtml(voucher.toName)}</div>
             <div><strong>Item:</strong> ${escapeHtml(voucher.itemName)} (S/N: ${escapeHtml(voucher.serialNumber)}) &bull; <strong>Condition:</strong> ${escapeHtml(voucher.condition)}</div>
@@ -2130,11 +2156,11 @@
           <table>
             <thead>
               <tr>
-                <th style="width:36px; text-align:center;">S/N</th>
-                <th style="width:120px;">Asset Tag</th>
-                <th style="width:130px;">Serial #</th>
-                <th>Utility / Equipment Description</th>
-                <th style="width:95px; text-align:center;">Condition</th>
+                <th style="width:7%; text-align:center;">No.</th>
+                <th style="width:21%;">Asset Tag</th>
+                <th style="width:22%;">Serial #</th>
+                <th style="width:34%;">Utility / Equipment Description</th>
+                <th style="width:16%; text-align:center;">Condition</th>
               </tr>
             </thead>
             <tbody>${rowsHtml}</tbody>
@@ -2327,14 +2353,12 @@
         const qty = parseInt(document.getElementById('assign-qty').value, 10) || 1;
         const customSn = document.getElementById('assign-sn').value.trim();
         const cond = document.getElementById('assign-cond').value;
-        const valInput = document.getElementById('assign-val').value;
         const remark = document.getElementById('assign-remark').value.trim() || 'Admin Stock Issuance';
         if (!cust || !itemName) return;
 
         if (!state.categories.some(c => c.toLowerCase() === itemName.toLowerCase())) {
           state.categories.push(itemName);
         }
-        const estVal = valInput ? parseInt(valInput, 10) : defaultValueFor(itemName);
         const createdTags = [];
         const ts = nowFormatted();
 
@@ -2348,7 +2372,6 @@
             assetClass: classifyItem(itemName),
             holderId: cust.id,
             condition: cond,
-            estValue: estVal,
             remark,
             history: [{
               date: ts,
@@ -2433,13 +2456,38 @@
         if (!state.isAdmin || !state.editingUnitTag) return;
         const unit = state.units.find(u => u.assetTag === state.editingUnitTag);
         if (!unit) return;
+
+        const before = { itemName: unit.itemName, serialNumber: unit.serialNumber, condition: unit.condition,
+                         assetClass: unit.assetClass, remark: unit.remark || '' };
+
+        const newName = document.getElementById('ud-name').value.trim() || unit.itemName;
+        const nameChanged = newName !== unit.itemName;
+        const newClass = document.getElementById('ud-class').value;
+
+        unit.itemName = newName;
         unit.serialNumber = document.getElementById('ud-sn').value.trim() || unit.serialNumber;
         unit.condition = document.getElementById('ud-cond').value;
-        unit.estValue = parseInt(document.getElementById('ud-val').value, 10) || 0;
-        saveState();
+        unit.remark = document.getElementById('ud-remark').value.trim();
+        // If the name changed and the admin did not touch the class, re-classify automatically
+        unit.assetClass = (nameChanged && newClass === before.assetClass) ? classifyItem(newName) : newClass;
+
+        if (!state.categories.includes(newName)) state.categories.push(newName);
+
+        const changes = [];
+        if (before.itemName !== unit.itemName) changes.push(`name "${before.itemName}" → "${unit.itemName}"`);
+        if (before.serialNumber !== unit.serialNumber) changes.push(`S/N ${before.serialNumber} → ${unit.serialNumber}`);
+        if (before.condition !== unit.condition) changes.push(`condition ${before.condition} → ${unit.condition}`);
+        if (before.assetClass !== unit.assetClass) changes.push(`class ${before.assetClass} → ${unit.assetClass}`);
+        if (before.remark !== unit.remark) changes.push('remark updated');
+
+        if (changes.length) {
+          appendLog(unit.holderId, 'EDITED', `Edited ${unit.assetTag}: ${changes.join('; ')}`, unit.assetTag);
+        } else {
+          saveState();
+        }
         closeModal('unit-detail-modal');
         renderAll();
-        showToast(`Updated serial & condition for ${unit.assetTag}.`);
+        showToast(changes.length ? `Updated details for ${unit.assetTag}.` : 'No changes to save.', changes.length ? 'success' : 'warn');
       });
 
       document.getElementById('clar-person').addEventListener('change', function () {
